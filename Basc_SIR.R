@@ -46,6 +46,7 @@ mutation.drift <- function(times, infected, seq_len, mut_rate) {
   
   #Beginning Mutation and Drift 
   for (i in 1:length(infected)) {
+    
     #marking the time step 
     timestep <- times[i]
     
@@ -53,42 +54,78 @@ mutation.drift <- function(times, infected, seq_len, mut_rate) {
     mean.mutation <- mut_rate*seq_len*infected[i]
     num.mutations <- rpois(1, mean.mutation)
     
-    #If there are mutations....
-    if(num.mutations > 0 ){
+    current.haplotypes <- get_haplotypes(hap.pop, timestep)  
+  
+    #If there are mutations....   
+    if(num.mutations > 0){
       
-      #get current haplotypes 
-      current.haplotypes <- get_haplotypes(hap.pop)
-    
       #choose equal number of haplotypes as number of mutations from infected by their frequency in the population
-      chosen.strains <- rmultinom(n = 1, size = num.mutations, prob = current.haplotypes[[1]])
+      chosen.strains <- rmultinom(n = 1, size = num.mutations, prob = current.haplotypes$frequencies)
       
       for (j in 1:length(chosen.strains)) {
         
         num.times.specific.strain <- chosen.strains[j,1] # how many times did we sample the same strain
+        og.strain.index <- j
         
         for (m in 1:num.times.specific.strain) {
-          strain <- current.haplotypes$strain[[j]] #Get selected strain from list of current haplotypes
-          baseindex <- round(runif(1, min = 1, max = seq_len)) # select an index to mutate
-          nucleotide <- strain[baseindex]
-          possible.mutations <- alphabet[which(alphabet != nucleotide)]
-          strain[baseindex] <- sample(possible.mutations, 1) #Mutate the strain to any of the other options
           
-          #create new haplotype and add to current set of haplotypes for replication purposes 
-        
-          strain.index <- length(current.haplotypes$strain)+1 #Number of current haplotypes with replication
+          # Mutate the strain 
+          new.strain <- mutate.strain(strain = current.haplotypes$strain[[og.strain.index]])
           
-          new.strain.frequency <- 1/infected[i]
-          old.strain.frequency <- (current.haplotypes$frequencies[j]*infected[i]-1)/infected[i] # new frequency of old strain
-          current.haplotypes$frequencies[j] <- old.strain.frequency
+          #Index the next 
+          strain.index <- length(current.haplotypes$strain)+1
+          
+          #Check if new strain is the same as any previous strains 
+          for (i in 1:length(current.haplotypes)) {
+            # Is it the same as any of the current haplotypes? 
+            if(length(which(new.strain == current.haplotypes[[i]]$strain)) == 100) {
+             
+              
+              #update the frequency of the strain for the timte step 
+              #Need to change this from current haplotypes
+              current.haplotypes$frequencies[i] <- current.haplotypes$frequencies[i]*infected[timestep]+1)/infected[timestep]
+            }
+          else {
+          current.haplotypes$strain[[strain.index]] <- new.strain
+          current.haplotypes$hindex[strain.index] <- "temporary" #Good through here 
+          
+          # Calculate and change the frequencies - Messed up here 
+          #calulate.mutated.frequencies(current.haplotypes, infected, og.strain.index, strain.index, timestep)
+          new.strain.frequency <- 1/infected[timestep]
+          old.strain.frequency <- (current.haplotypes$frequencies[og.strain.index]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
+          current.haplotypes$frequencies[og.strain.index] <- old.strain.frequency
           current.haplotypes$frequencies[strain.index] <- new.strain.frequency
-          current.haplotypes$strain[[strain.index]] <- strain
-          current.haplotypes$hindex[strain.index] <- "temporary"
         }
       }
-          
-            
+    } 
+  }
+}
+      
+    #replicate based on number of infections in next timestep
+   
+    if(infected[timestep] == length(infected)) {
+      return
+    }
+    else {
+      num.new.infecteds <- infected[timestep+1]
+      new.strains <- rmultinom(n = 1, size = num.new.infecteds, prob = current.haplotypes$frequencies)
+     
+      #list of new haplotypes - #need to change this so that frequencies aren't in a column
+      nex.gen.hap <- list(hindex = current.haplotypes$hindex, frequencies = as.vector(new.strains)/num.new.infecteds, strain = current.haplotypes$strain)
+      
+      #check if any have temporary have above 0 frequency 
+      for (i in 1:length(nex.gen.hap$hindex) {
+        
+      }      
+      #update historical record 
+      
+      
+    }
+   
+    else{}
             
         }
+    
       }
       
       
