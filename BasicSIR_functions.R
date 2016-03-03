@@ -18,6 +18,7 @@ get_current <- function(population,timestep) {
       present.sequences[[total.present]] <- strain
       present.frequences[total.present] <- frequency
       present.hindex[total.present] <- hindex
+    } else {   
     }
   } 
   current.haplotypes <- list(hindex = present.hindex,frequencies =  present.frequences, strain = present.sequences)
@@ -93,3 +94,22 @@ get_divergence <- function(current.haplotypes, base_haplotype) {
 }
 
 
+
+#initialize population
+init_population <- function(times, base_haplotype) {
+  #Setting up the population list to store haplotypes through time 
+  frequency.df <- data.frame(rep(0, length(times))) #storing the frequencies of each strain
+  colnames(frequency.df) <- paste("strain",1, sep = ".")
+  
+  #storing number of unique strains in the population 
+  hindex <- c()
+  hindex[1] <- 1 #initializing the first 
+  
+  #List of strains 
+  strain <- list()
+  strain[[1]] <- base_haplotype
+  
+  population <- list(hindex = hindex, frequency = frequency.df, strain = strain )
+  population$frequency$strain.1[1] <- 1 #When there is only one strain introduced   
+  return(population)
+}
