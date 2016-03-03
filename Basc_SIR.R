@@ -3,77 +3,91 @@ sir <- function(time, state, parameters) {
   with(as.list(c(state, parameters)), {
     dS <- -beta * S * I
     dI <- beta * S * I - gamma * I
-   # dcumI <- beta*S*I
+    # dcumI <- beta*S*I
     dR <- gamma * I
     
     return(list(c(dS, dI, dR)))
   })
 }
-
-out
-
 # Need to convert cumulative to incidence 
 
-init <- c(S = 1-1e-6, I = 1e-6, 0.0) #1e-6
-parameters <- c(beta = 1.4247, gamma = 0.14286)
+init <- c(S = 1-1e-4, I = 1e-4, 0.0) #1e-6
+parameters <- c(beta = 0.599, gamma = 0.14286)
 times <- seq(1, 70, by = 1)
 out <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
 out$time <- NULL
 
-population.out <- 10^6*out #population x proportion to get numbers 
+
+matplot(times, out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
+legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
+
+
+
+population.out <- 10^4*out #population x proportion to get numbers 
 
 
 seq_len <- 100
 alphabet = c(1, 2, 3, 4)
-mut_rate = 0.0001 # per gen per individual per site
+year_mut_rate <- 1.8*10^-3
+day_mut_rate <- year_mut_rate / 365 #per site per day
+
+
+
 
 #For testing
-infected <- population.out$I[1:7]
-times <- times[1:7]
+source('~/Documents/Project1/VaccineEvolution/BasicSIR_functions.R') # For lab computer 
+infected <- population.out$I[1:70]
+times <- c(1:70)
 
 
 #########################
 #Initialization of Population 
-  #initalize diveristy and divergence vectors
-  diversity <- rep(0, length(times))
-  divergence <- rep(0, length(times))
-  
-  
-  #initialize sequence 
-  base_haplotype = rep(1, seq_len)
+#initalize diveristy and divergence vectors
+diversity <- rep(0, length(times))
+divergence <- rep(0, length(times))
+number.of.strains <- rep(0, length(times))
 
-  population <- init_population(times = times, base_haplotype = base_haplotype)
-    
+
+#initialize sequence 
+base_haplotype = rep(1, seq_len)
+
+population <- init_population(times = times, base_haplotype = base_haplotype)
+
 
 #Beginning Mutation and Drift 
-for (i in 1:length(times) {
-    
-    #marking the time step 
-    timestep <- times[i]
-    
-    #calculate diversity and divergence for the timestep before the mutation and replication event
-    current.haplotypes <- get_current(population, timestep)  
-    num.current.strains <- length(current.haplotypes$hindex)
-    diversity[timestep] <- get_diversity(current.haplotypes)
-    divergence[timestep] <- get_divergence(current.haplotypes, base_haplotype)
+for (i in 1:(max(times)-1)) {
   
-      
-    #get expected number of mutations assuming one sequence per individual
-    mean.mutation <- mut_rate*seq_len*infected[timestep]
-    num.mutations <- rpois(1, mean.mutation)
+  #marking the time step 
+  timestep <- times[i]
+  print(paste("timestep", timestep, sep = "-"))
   
-    #If there are mutations....   
-    if(num.mutations > 0){    
-      #choose equal number of haplotypes as number of mutations from infected by their frequency in the population
-      chosen.strains <- as.vector(rmultinom(n = 1, size = num.mutations, prob = current.haplotypes$frequencies))
-      original.current.strains <- length(chosen.strains) #how many strains are there in the population to mutate
+  #calculate diversity and divergence for the timestep before the mutation and replication event
+  number.of.strains[i] <- length(population$hindex)
+  
+  current.haplotypes <- get_current(population, timestep)  
+  num.current.strains <- length(current.haplotypes$hindex)
+  diversity[timestep] <- get_diversity(current.haplotypes)
+  divergence[timestep] <- get_divergence(current.haplotypes, base_haplotype)
+ 
+  
+  
+  #get expected number of mutations assuming one sequence per individual
+  mean.mutation <- day_mut_rate*seq_len*infected[timestep]
+  num.mutations <- rpois(1, mean.mutation)
+  print(paste("number of mutations", num.mutations, sep = "-"))
+  
+  #If there are mutations....   
+  if (num.mutations > 0) {    
+    #choose equal number of haplotypes as number of mutations from infected by their frequency in the population
+    chosen.strains <- as.vector(rmultinom(n = 1, size = num.mutations, prob = current.haplotypes$frequencies))
+    original.current.strains <- length(chosen.strains) #how many strains are there in the population to mutate
+    
+    for (j in 1:original.current.strains) { #for each of the original strains in the population
+      num.current.strains <- length(current.haplotypes$hindex) # how many are there-this will be added to 
+      num.times.specific.strain <- chosen.strains[j] # how many times did we sample this particular strains
       
-      for (j in 1:original.current.strains) { #for each of the original strains in the population
-        num.current.strains <- length(current.haplotypes$hindex) # how many are there-this will be added to 
-        num.times.specific.strain <- chosen.strains[j] # how many times did we sample this particular strains
-       
-        #if we sampled this particular strain at least once 
-        if (num.times.specific.strain > 0) {
+      #if we sampled this particular strain at least once 
+      if (num.times.specific.strain > 0) {
         for (m in 1:num.times.specific.strain) { #for however many times we did 
           
           # Mutate the strain 
@@ -81,7 +95,7 @@ for (i in 1:length(times) {
           
           #Index the next 
           num.current.strains <- num.current.strains+1
-  
+          
           current.haplotypes$strain[[num.current.strains]] <- new.strain
           current.haplotypes$hindex[num.current.strains] <- "temporary" #Good through here 
           
@@ -91,100 +105,107 @@ for (i in 1:length(times) {
           old.strain.frequency <- (current.haplotypes$frequencies[j]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
           current.haplotypes$frequencies[j] <- old.strain.frequency
           current.haplotypes$frequencies[num.current.strains] <- new.strain.frequency
-          print(sum(current.haplotypes$frequencies))
-              }
-            }
-          } 
-        }  
+          print(paste("frequency.after.mutation",sum(current.haplotypes$frequencies), sep = "-"))
+        }
+      }
+    } 
+  } 
+  
+  
+  
+  
+  #Drift - Replication Part 
+  num.new.infecteds <- ceiling(infected[timestep+1])
+  print(paste("num.infections.in next", num.new.infecteds, sep = "-"))
+  new.strains <- rmultinom(n = 1, size = num.new.infecteds, prob = current.haplotypes$frequencies)
+  
+  #list of new haplotypes
+  nex.gen.hap <- list(hindex = current.haplotypes$hindex, frequencies = as.vector(new.strains)/num.new.infecteds, strain = current.haplotypes$strain)
+  print(paste("sum of freq in next gen",sum(nex.gen.hap$frequencies), sep = "-"))
+  
+  #check if any have strains that were mutated have 0 frequency - i.e. mutated and didn't replicate 
+  
+  if (num.mutations > 0) { 
+    temporary.strains <- which(nex.gen.hap$hindex == "temporary") #get what strains are temporary 
+    erase.strains <- c()
+    for(j in 1:length(temporary.strains)) { #for how many temporary strains there are 
+      if (nex.gen.hap$frequencies[temporary.strains[j]] == 0) { # if the don't have a frequency, store them to delete later
+        erase.strains <- c(erase.strains, j)
+      } 
+    }
+    #deleteing 0 frequencies 
+    if(length(erase.strains) > 0) {
+    nex.gen.hap$hindex <- nex.gen.hap$hindex[-temporary.strains[erase.strains]]
+    nex.gen.hap$frequencies <-nex.gen.hap$frequencies[-temporary.strains[erase.strains]]
+    nex.gen.hap$strain <- nex.gen.hap$strain[-temporary.strains[erase.strains]]
+    }
+  }
     
     
+    #update historical record 
+    #update_population <- function(nex.gen.hap, population, timestep) {
     
+    print(paste("updatinghistorical.record", timestep, sep = "."))
     
-      #Drift - Replication Part 
-      num.new.infecteds <- ceiling(infected[timestep+1])
-      new.strains <- rmultinom(n = 1, size = num.new.infecteds, prob = current.haplotypes$frequencies)
-     
-      #list of new haplotypes
-      nex.gen.hap <- list(hindex = current.haplotypes$hindex, frequencies = as.vector(new.strains)/num.new.infecteds, strain = current.haplotypes$strain)
-      print(sum(nex.gen.hap$frequencies))
-      
-      #check if any have temporary have 0 frequency - i.e. mutated and didn't replicate 
-      for (i in 1:length(nex.gen.hap$hindex)) {
-        if(length(which(nex.gen.hap$hindex == "temporary")) > 0) {
-          temporary.strains <- which(nex.gen.hap$hindex == "temporary")
-          for(j in 1:length(temporary.strains)) {
-            if (nex.gen.hap$frequencies[temporary.strains[j]] == 0) {
-            nex.gen.hap$hindex <- nex.gen.hap$hindex[-temporary.strains]
-            nex.gen.hap$frequencies <-nex.gen.hap$frequencies[-temporary.strains]
-            nex.gen.hap$strain <- nex.gen.hap$strain[-temporary.strains]
+    new.hindex <- as.character(nex.gen.hap$hindex)
+    pop.hindex <- as.character(population$hindex)
+    same.hindex <- which(new.hindex%in%pop.hindex)
+    different.hindex <- which(!new.hindex%in%pop.hindex) #which new strain indexes aren't in the population
+    older.strains <- which(!pop.hindex%in%new.hindex) #which hindex were once present but not in current
+    num.old.strains <- length(older.strains)
+    
+    #For those that are the same, update their frequencies in next time step
+    for(l in 1:length(same.hindex)) {
+      population$frequency[timestep+1,same.hindex[l]] <- nex.gen.hap$frequencies[same.hindex[l]]
+    }
+    
+    #If temporary, check if strain matches previous that have gone extinct
+    #Loops through all those strains that weren't in the previous generation
+    
+    #rewriting this - 
+    
+    if (length(different.hindex) > 0 ) {
+      print("there are temporary strains")
+      for (m in 1:length(different.hindex)) { #for how many different strains there are 
+        temp_strain <- nex.gen.hap$strain[[different.hindex[m]]]
+        
+        #Loops through all the strains that have been in the population but weren't in the previous
+        #If not any, go straight to add new 
+        if (num.old.strains > 0 ) {
+          matched = 0
+          for(k in 1:num.old.strains) {
+            ancestor_strain <- population$strain[[older.strains[k]]]      
+            #checks the distance between the two, if its 0 (i.e., same frequency) puts that frequency in the timestep 
+            if(get_distance(temp_strain, ancestor_strain) == 0) {
+              print(paste("temporary matched previous", k, sep = "-"))
+              population$frequency[timestep+1,older.strains[k]] <- nex.gen.hap$frequencies[different.hindex[m]]
+              matched = 1
+              print("match")
             }
           }
-        }
-      } #End of loop for didn't have any temporary  - Good through here      
-      
-      #update historical record 
-      #update_population <- function(nex.gen.hap, population, timestep) {
-        new.hindex <- as.character(nex.gen.hap$hindex)
-        pop.hindex <- as.character(population$hindex)
-        same.hindex <- which(new.hindex%in%pop.hindex)
-        different.hindex <- which(!new.hindex%in%pop.hindex) #which new strain indexes aren't in the population
-        older.strains <- which(!pop.hindex%in%new.hindex) #which hindex were once present but not in current
+          if(matched == 1) return #stop looking through older strains
+        } 
         
-        #For those that are the same, update their frequencies in next time step
-        for(i in 1:length(same.hindex)) {
-        population$frequency[timestep+1,same.hindex[i]] <- nex.gen.hap$frequencies[same.hindex[i]]
-        }
         
-        #If temporary, check if strain matches previous that have gone extinct
-        #Loops through all those strains that weren't in the previous generation
-        if (length(different.hindex) > 0 ) {
-        for (m in 1:length(different.hindex)) { #for how many different strains there are 
-          temp_strain <- nex.gen.hap$strain[[different.hindex[m]]]
-          
-          #Loops through all the strains that have been in the population but weren't in the previous
-          #If not any, go straight to add new 
-          if (length(older.strains) > 0){    
-            
-              for(k in 1:length(older.strains)) {
-                ancestor_strain <- population$strain[[older.strains[k]]]      
-                #checks the distance between the two, if its 0 (i.e., same frequency) puts that frequency in the timestep 
-                if(get_distance(temp_strain, ancestor_strain) == 0) {
-                population$frequency[timestep+1,older.strains[k]] <- nex.gen.hap$frequency[different.hindex[m]]
-                match = match + 1
-                }
-                if(match == 1) return
-              } 
-            } 
-          
-          #Adding to population
-          new.strain.hindex <- length(population$hindex)+1
-          population$hindex[new.strain.hindex] <- new.strain.hindex
-          population$strain[[new.strain.hindex]] <- temp_strain
-          new.strain.name <- paste("strain", new.strain.hindex, sep = ".")
-          population$frequency$new.strain.hindex <- rep(0, length(times))
-          names(population$frequency)[names(population$frequency) == 'new.strain.hindex'] <- new.strain.name
-          population$frequency[timestep+1,new.strain.hindex] <- nex.gen.hap$frequencies[different.hindex[m]]    
-          } #Loop if there aren't any strains that were once present, but not in the most recent generation
-      }
+        #Adding to population
+        new.strain.hindex <- length(population$hindex)+1
+        population$hindex[new.strain.hindex] <- new.strain.hindex
+        population$strain[[new.strain.hindex]] <- temp_strain
+        new.strain.name <- paste("strain", new.strain.hindex, sep = ".")
+        population$frequency$new.strain.hindex <- rep(0, length(times))
+        names(population$frequency)[names(population$frequency) == 'new.strain.hindex'] <- new.strain.name
+        population$frequency[timestep+1,new.strain.hindex] <- nex.gen.hap$frequencies[different.hindex[m]]    
+      } #Loop if there aren't any strains that were once present, but not in the most recent generation
+    }
+    print(paste("finished.updating.records", timestep, sep  = "-"))
   }
 
+  #Last Time Step 
+  genetic.metrics <- calculate_last.time.step(times, population, diversity, divergence, number.of.strains)
 
-
-
-
-
-  #Last Time Step
-  last.time.step <- length(timestep)
-  current.haplotypes <- get_current(population, last.time.step)  
-  num.current.strains <- length(current.haplotypes$hindex)
-  diversity[last.time.step] <- get_diversity(current.haplotypes)
-  divergence[last.time.step] <- get_divergence(current.haplotypes, base_haplotype)
-                 
-     
   
-  
-matplot(times, out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
+matplot(times, genetic.metrics, type = "l", xlab = "Time", ylab = "Diveristy and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
+plot(times, genetic.metrics$diversity, type = "l", xlab = "Time", ylab = "Diversity", main = 'SIR Model', col = "red")
+plot(times, genetic.metrics$divergence, type = "l", xlab = "Time", ylab = "Divergence", main = "SIR Model", col = "blue")
 legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
-
-
-out
+  

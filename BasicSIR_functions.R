@@ -113,3 +113,13 @@ init_population <- function(times, base_haplotype) {
   population$frequency$strain.1[1] <- 1 #When there is only one strain introduced   
   return(population)
 }
+
+calculate_last.time.step <- function(times, population, diversity, divergence, number.of.strains) {
+  last.time.step <- length(times)
+  number.of.strains[last.time.step] <- length(population$hindex)
+  current.haplotypes <- get_current(population, last.time.step)  
+  num.current.strains <- length(current.haplotypes$hindex)
+  diversity[last.time.step] <- get_diversity(current.haplotypes)
+  divergence[last.time.step] <- get_divergence(current.haplotypes, base_haplotype)
+  return(list(diversity = diversity, divergence = divergence, number.of.strains = number.of.strains))
+}
