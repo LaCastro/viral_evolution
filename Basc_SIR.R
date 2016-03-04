@@ -11,17 +11,11 @@ sir <- function(time, state, parameters) {
 }
 # Need to convert cumulative to incidence 
 
-init <- c(S = 1-1e-4, I = 1e-4, 0.0) #1e-6
+init <- c(S = 1-1e-4, I = 1e-4, 0.0) #1e-4
 parameters <- c(beta = 0.599, gamma = 0.14286)
 times <- seq(1, 70, by = 1)
 out <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
 out$time <- NULL
-
-
-matplot(times, out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
-legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
-
-
 
 population.out <- 10^4*out #population x proportion to get numbers 
 
@@ -32,10 +26,7 @@ year_mut_rate <- 1.8*10^-3
 day_mut_rate <- year_mut_rate / 365 #per site per day
 
 
-
-
 #For testing
-source('~/Documents/Project1/VaccineEvolution/BasicSIR_functions.R') # For lab computer 
 infected <- population.out$I[1:70]
 times <- c(1:70)
 
@@ -45,7 +36,8 @@ times <- c(1:70)
 #initalize diveristy and divergence vectors
 diversity <- rep(0, length(times))
 divergence <- rep(0, length(times))
-number.of.strains <- rep(0, length(times))
+total.strains <- rep(0, length(times))
+circulating.strains <- rep(0, length(times))
 
 
 #initialize sequence 
@@ -62,10 +54,12 @@ for (i in 1:(max(times)-1)) {
   print(paste("timestep", timestep, sep = "-"))
   
   #calculate diversity and divergence for the timestep before the mutation and replication event
-  number.of.strains[i] <- length(population$hindex)
+  total.strains[i] <- length(population$hindex)
+ 
   
   current.haplotypes <- get_current(population, timestep)  
-  num.current.strains <- length(current.haplotypes$hindex)
+  #num.current.strains <- length(current.haplotypes$hindex)
+  circulating.strains[i] <- length(current.haplotypes$hindex)
   diversity[timestep] <- get_diversity(current.haplotypes)
   divergence[timestep] <- get_divergence(current.haplotypes, base_haplotype)
  
@@ -97,9 +91,9 @@ for (i in 1:(max(times)-1)) {
           num.current.strains <- num.current.strains+1
           
           current.haplotypes$strain[[num.current.strains]] <- new.strain
-          current.haplotypes$hindex[num.current.strains] <- "temporary" #Good through here 
+          current.haplotypes$hindex[num.current.strains] <- "temporary"
           
-          # Calculate and change the frequencies - Messed up here 
+          # Calculate and change the frequencies
           #calulate.mutated.frequencies(current.haplotypes, infected, og.strain.index, strain.index, timestep)
           new.strain.frequency <- 1/infected[timestep]
           old.strain.frequency <- (current.haplotypes$frequencies[j]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
@@ -201,11 +195,10 @@ for (i in 1:(max(times)-1)) {
   }
 
   #Last Time Step 
-  genetic.metrics <- calculate_last.time.step(times, population, diversity, divergence, number.of.strains)
+  genetic.metrics <- calculate_last.time.step(times, population,
+                                              diversity, divergence, total.strains = total.strains, 
+                                              circulating.strains = circulating.strains)
 
-  
-matplot(times, genetic.metrics, type = "l", xlab = "Time", ylab = "Diveristy and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
-plot(times, genetic.metrics$diversity, type = "l", xlab = "Time", ylab = "Diversity", main = 'SIR Model', col = "red")
-plot(times, genetic.metrics$divergence, type = "l", xlab = "Time", ylab = "Divergence", main = "SIR Model", col = "blue")
-legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
-  
+plot_results(out, genetic.metrics) 
+
+

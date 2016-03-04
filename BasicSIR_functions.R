@@ -114,12 +114,26 @@ init_population <- function(times, base_haplotype) {
   return(population)
 }
 
-calculate_last.time.step <- function(times, population, diversity, divergence, number.of.strains) {
+calculate_last.time.step <- function(times, population, diversity, divergence, total.strains, circulating.strains) {
   last.time.step <- length(times)
-  number.of.strains[last.time.step] <- length(population$hindex)
+  total.strains[last.time.step] <- length(population$hindex)
   current.haplotypes <- get_current(population, last.time.step)  
-  num.current.strains <- length(current.haplotypes$hindex)
+  circulating.strains[last.time.step] <- length(current.haplotypes$hindex)
   diversity[last.time.step] <- get_diversity(current.haplotypes)
   divergence[last.time.step] <- get_divergence(current.haplotypes, base_haplotype)
-  return(list(diversity = diversity, divergence = divergence, number.of.strains = number.of.strains))
+  return(list(diversity = diversity, divergence = divergence, total.strains = total.strains, circulating.strains = circulating.strains))
+}
+
+plot_results <- function(out, genetic.metrics) {
+  par(mfrow = c(2,2))
+  matplot(times, out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
+  legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
+  
+  
+  plot(times, genetic.metrics$diversity, type = "l", xlab = "Time", ylab = "Diversity", main = 'SIR Model', col = "red")
+  plot(times, genetic.metrics$divergence, type = "l", xlab = "Time", ylab = "Divergence", main = "SIR Model", col = "blue")
+  plot(times, genetic.metrics$total.strains, type = 'l', xlab = "Time", ylab = "Strain Numbers", main = "Number of Circulating Strains", col = "2")
+  legend("topleft", c("Total", "Current"), pch = 1, col = 2:3)
+  lines(genetic.metrics$circulating.strains, col = 3)
+  
 }
