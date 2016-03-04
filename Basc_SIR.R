@@ -1,32 +1,13 @@
-library(deSolve)
-sir <- function(time, state, parameters) {
-  with(as.list(c(state, parameters)), {
-    dS <- -beta * S * I
-    dI <- beta * S * I - gamma * I
-    # dcumI <- beta*S*I
-    dR <- gamma * I
-    
-    return(list(c(dS, dI, dR)))
-  })
-}
-# Need to convert cumulative to incidence 
-
-init <- c(S = 1-1e-4, I = 1e-4, 0.0) #1e-4
+#Simulation for SIR 
+init <- c(S = 1-1e-5, I = 1e-5, 0.0) #1e-4
 parameters <- c(beta = 0.599, gamma = 0.14286)
 times <- seq(1, 70, by = 1)
 out <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
 out$time <- NULL
-
-population.out <- 10^4*out #population x proportion to get numbers 
-
-
-seq_len <- 100
-alphabet = c(1, 2, 3, 4)
-year_mut_rate <- 1.8*10^-3
-day_mut_rate <- year_mut_rate / 365 #per site per day
+population.out <- 10^5*out #population x proportion to get numbers 
 
 
-#For testing
+#For use in the mutation simulation 
 infected <- population.out$I[1:70]
 times <- c(1:70)
 
@@ -39,6 +20,13 @@ divergence <- rep(0, length(times))
 total.strains <- rep(0, length(times))
 circulating.strains <- rep(0, length(times))
 
+
+
+#Parameters for mutation model
+seq_len <- 100
+alphabet = c(1, 2, 3, 4)
+year_mut_rate <- 1.8*10^-3
+day_mut_rate <- year_mut_rate / 365 #per site per day
 
 #initialize sequence 
 base_haplotype = rep(1, seq_len)
@@ -195,7 +183,7 @@ for (i in 1:(max(times)-1)) {
   }
 
   #Last Time Step 
-  genetic.metrics <- calculate_last.time.step(times, population,
+genetic.metrics <- calculate_last.time.step(times, population,
                                               diversity, divergence, total.strains = total.strains, 
                                               circulating.strains = circulating.strains)
 

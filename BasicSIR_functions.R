@@ -1,3 +1,16 @@
+library(deSolve)
+
+sir <- function(time, state, parameters) {
+  with(as.list(c(state, parameters)), {
+    dS <- -beta * S * I
+    dI <- beta * S * I - gamma * I
+    # dcumI <- beta*S*I
+    dR <- gamma * I
+    
+    return(list(c(dS, dI, dR)))
+  })
+}
+
 get_current <- function(population,timestep) {
   num.strains.pop <- length(population$hindex)
   
@@ -49,40 +62,43 @@ mutate.strain <- function(strain)  {
 
 
 
-#calculate the diversity between all strains - #working 
+#calculate the diversity between all strains 
 get_diversity <- function(current.haplotypes) {
   num.of.strains <- length(current.haplotypes$frequencies)
   diversity = 0
-  for (i in 1:num.of.strains) {
-    for (j in 1:num.of.strains) {
-      strain_a <- current.haplotypes$strain[[i]]
-      strain_b <- current.haplotypes$strain[[j]]
-      frequency_a <- current.haplotypes$frequencies[i]
-      frequency_b <- current.haplotypes$frequencies[j]
-      frequency_ab <- frequency_a* frequency_b
-      diversity = diversity + frequency_ab * get_distance(strain_a, strain_b)
+  if (num.of.strains > 1) {
+    for (i in 1:(num.of.strains-1)) {
+      for (j in (i+1):num.of.strains) {
+        strain_a <- current.haplotypes$strain[[i]]
+        strain_b <- current.haplotypes$strain[[j]]
+        frequency_a <- current.haplotypes$frequencies[i]
+        frequency_b <- current.haplotypes$frequencies[j]
+        frequency_ab <- frequency_a* frequency_b
+        diversity = diversity + frequency_ab * get_distance(strain_a, strain_b)
+      }
     }
+  } else {
+    diversity = 0
   }
   return(diversity)
 }
-
 
 
 #calculate the distance between two particular strains 
 #This is working 
 get_distance <- function(strain_a, strain_b) {
   differences = 0
-    for(i in 1:length(strain_a)) {
-      if((strain_a[i]-strain_b[i]) != 0) {
-        differences = differences + 1
-      } else {
-        }
-    }
+  for(i in 1:length(strain_a)) {
+    if((strain_a[i]-strain_b[i]) != 0) {
+      differences = differences + 1
+    } 
+  }
   return(differences/length(strain_a))
 }
 
 
-#calculate the divergence - working! 
+
+#calculate the divergence
 get_divergence <- function(current.haplotypes, base_haplotype) {
   divergence = 0
   for (i in 1:length(current.haplotypes$frequencies)) {
@@ -126,7 +142,7 @@ calculate_last.time.step <- function(times, population, diversity, divergence, t
 
 plot_results <- function(out, genetic.metrics) {
   par(mfrow = c(2,2))
-  matplot(times, out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
+  matplot(times, population.out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
   legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
   
   
