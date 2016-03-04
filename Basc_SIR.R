@@ -8,8 +8,8 @@ population.out <- 10^5*out #population x proportion to get numbers
 
 
 #For use in the mutation simulation 
-infected <- population.out$I[1:70]
-times <- c(1:70)
+infected <- population.out$I[1:35]
+times <- c(1:35)
 
 
 #########################
@@ -43,14 +43,14 @@ for (i in 1:(max(times)-1)) {
   
   #calculate diversity and divergence for the timestep before the mutation and replication event
   total.strains[i] <- length(population$hindex)
- 
+  
   
   current.haplotypes <- get_current(population, timestep)  
   #num.current.strains <- length(current.haplotypes$hindex)
   circulating.strains[i] <- length(current.haplotypes$hindex)
   diversity[timestep] <- get_diversity(current.haplotypes)
   divergence[timestep] <- get_divergence(current.haplotypes, base_haplotype)
- 
+  
   
   
   #get expected number of mutations assuming one sequence per individual
@@ -70,24 +70,33 @@ for (i in 1:(max(times)-1)) {
       
       #if we sampled this particular strain at least once 
       if (num.times.specific.strain > 0) {
-        for (m in 1:num.times.specific.strain) { #for however many times we did 
+        for (m in 1:num.times.specific.strain) { #for however many times we are going to mutate strain j
           
           # Mutate the strain 
           new.strain <- mutate.strain(strain = current.haplotypes$strain[[j]]) 
           
-          #Index the next 
-          num.current.strains <- num.current.strains+1
+          #check if strain is the same as any current strain 
+          is.it.current <- check.with.current(new.strain, current.haplotypes) 
           
-          current.haplotypes$strain[[num.current.strains]] <- new.strain
-          current.haplotypes$hindex[num.current.strains] <- "temporary"
           
-          # Calculate and change the frequencies
-          #calulate.mutated.frequencies(current.haplotypes, infected, og.strain.index, strain.index, timestep)
-          new.strain.frequency <- 1/infected[timestep]
-          old.strain.frequency <- (current.haplotypes$frequencies[j]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
-          current.haplotypes$frequencies[j] <- old.strain.frequency
-          current.haplotypes$frequencies[num.current.strains] <- new.strain.frequency
-          print(paste("frequency.after.mutation",sum(current.haplotypes$frequencies), sep = "-"))
+          if(is.it.current$distance > 0) {
+            index.same.strain <- is.it.current$index
+            current.haplotypes$frequencies[index.same.strain] <- ((current.haplotypes$frequencies[index.same.strain]*infected[timestep])+1)/infected[timestep]
+          } else {
+            
+            #Index the next 
+            num.current.strains <- num.current.strains+1
+            current.haplotypes$strain[[num.current.strains]] <- new.strain
+            current.haplotypes$hindex[num.current.strains] <- "temporary"
+            
+            # Calculate and change the frequencies
+            #calulate.mutated.frequencies(current.haplotypes, infected, og.strain.index, strain.index, timestep)
+            new.strain.frequency <- 1/infected[timestep]
+            old.strain.frequency <- (current.haplotypes$frequencies[j]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
+            current.haplotypes$frequencies[j] <- old.strain.frequency
+            current.haplotypes$frequencies[num.current.strains] <- new.strain.frequency
+            print(paste("frequency.after.mutation",sum(current.haplotypes$frequencies), sep = "-"))
+          }
         }
       }
     } 
@@ -103,8 +112,7 @@ for (i in 1:(max(times)-1)) {
   
   #list of new haplotypes
   nex.gen.hap <- list(hindex = current.haplotypes$hindex, frequencies = as.vector(new.strains)/num.new.infecteds, strain = current.haplotypes$strain)
-  print(paste("sum of freq in next gen",sum(nex.gen.hap$frequencies), sep = "-"))
-  
+  print(paste("sum of freq after rep",sum(nex.gen.hap$frequencies), sep = "-"))
   #check if any have strains that were mutated have 0 frequency - i.e. mutated and didn't replicate 
   
   if (num.mutations > 0) { 
@@ -117,75 +125,56 @@ for (i in 1:(max(times)-1)) {
     }
     #deleteing 0 frequencies 
     if(length(erase.strains) > 0) {
-    nex.gen.hap$hindex <- nex.gen.hap$hindex[-temporary.strains[erase.strains]]
-    nex.gen.hap$frequencies <-nex.gen.hap$frequencies[-temporary.strains[erase.strains]]
-    nex.gen.hap$strain <- nex.gen.hap$strain[-temporary.strains[erase.strains]]
+      nex.gen.hap$hindex <- nex.gen.hap$hindex[-temporary.strains[erase.strains]]
+      nex.gen.hap$frequencies <-nex.gen.hap$frequencies[-temporary.strains[erase.strains]]
+      nex.gen.hap$strain <- nex.gen.hap$strain[-temporary.strains[erase.strains]]
     }
   }
-    
-    
-    #update historical record 
-    #update_population <- function(nex.gen.hap, population, timestep) {
-    
-    print(paste("updatinghistorical.record", timestep, sep = "."))
-    
-    new.hindex <- as.character(nex.gen.hap$hindex)
-    pop.hindex <- as.character(population$hindex)
-    same.hindex <- which(new.hindex%in%pop.hindex)
-    different.hindex <- which(!new.hindex%in%pop.hindex) #which new strain indexes aren't in the population
-    older.strains <- which(!pop.hindex%in%new.hindex) #which hindex were once present but not in current
-    num.old.strains <- length(older.strains)
-    
-    #For those that are the same, update their frequencies in next time step
-    for(l in 1:length(same.hindex)) {
-      population$frequency[timestep+1,same.hindex[l]] <- nex.gen.hap$frequencies[same.hindex[l]]
-    }
-    
-    #If temporary, check if strain matches previous that have gone extinct
-    #Loops through all those strains that weren't in the previous generation
-    
-    #rewriting this - 
-    
-    if (length(different.hindex) > 0 ) {
-      print("there are temporary strains")
-      for (m in 1:length(different.hindex)) { #for how many different strains there are 
-        temp_strain <- nex.gen.hap$strain[[different.hindex[m]]]
-        
-        #Loops through all the strains that have been in the population but weren't in the previous
-        #If not any, go straight to add new 
-        if (num.old.strains > 0 ) {
-          matched = 0
-          for(k in 1:num.old.strains) {
-            ancestor_strain <- population$strain[[older.strains[k]]]      
-            #checks the distance between the two, if its 0 (i.e., same frequency) puts that frequency in the timestep 
-            if(get_distance(temp_strain, ancestor_strain) == 0) {
-              print(paste("temporary matched previous", k, sep = "-"))
-              population$frequency[timestep+1,older.strains[k]] <- nex.gen.hap$frequencies[different.hindex[m]]
-              matched = 1
-              print("match")
-            }
-          }
-          if(matched == 1) return #stop looking through older strains
-        } 
-        
-        
-        #Adding to population
-        new.strain.hindex <- length(population$hindex)+1
-        population$hindex[new.strain.hindex] <- new.strain.hindex
-        population$strain[[new.strain.hindex]] <- temp_strain
-        new.strain.name <- paste("strain", new.strain.hindex, sep = ".")
-        population$frequency$new.strain.hindex <- rep(0, length(times))
-        names(population$frequency)[names(population$frequency) == 'new.strain.hindex'] <- new.strain.name
-        population$frequency[timestep+1,new.strain.hindex] <- nex.gen.hap$frequencies[different.hindex[m]]    
-      } #Loop if there aren't any strains that were once present, but not in the most recent generation
-    }
-    print(paste("finished.updating.records", timestep, sep  = "-"))
+  
+  print(paste("sum of freq in next gen",sum(nex.gen.hap$frequencies), sep = "-"))
+  
+  #update historical record 
+  
+  print(paste("updatinghistorical.record", timestep, sep = "."))
+  
+  new.hindex <- as.character(nex.gen.hap$hindex)
+  pop.hindex <- as.character(population$hindex)
+  
+  same.hindex <- which(new.hindex%in%pop.hindex) # These indicies of nex.gen.hap that have the same as population and can add them 
+  same.indices <- as.numeric(new.hindex[same.index]) # The hindex in the population 
+  
+  #For those that are the same, set their frequencies in next time step
+  for(l in 1:length(same.hindex)) {
+    population$frequency[timestep+1,same.indices] <- nex.gen.hap$frequencies[same.index]
   }
+  
+  different.hindex <- which(!new.hindex%in%pop.hindex) 
+  print("split differint index")
+  
+  different.strains <- split.list(nex.gen.hap, different.hindex) #The different nex.gen.hap strain indcices 
+  
+  #older.hindex <- which(!pop.hindex%in%new.hindex) #which hindex were once present but not in current
+  #older.strains <- split.list(population, older.hindex)
+  #print("split older index")
+  
+  
+  #If temporary, check if strain matches previous that have gone extinct
+  #Loops through all those strains that weren't in the previous generation
+  
+  #rewriting this - 
+  
+  if (length(different.hindex) > 0 ) {
+    population <- update.ancestor.pop(population, different.strains)
+    print("entered this loop")
+    print(paste("sum of frequencies in next.gen", sum(population$frequency[timestep+1,]), sep  = "-"))
+  }
+  print(paste("sum of frequencies in next.gen", sum(population$frequency[timestep+1,]), sep  = "-"))
+}
 
-  #Last Time Step 
+#Last Time Step 
 genetic.metrics <- calculate_last.time.step(times, population,
-                                              diversity, divergence, total.strains = total.strains, 
-                                              circulating.strains = circulating.strains)
+                                            diversity, divergence, total.strains = total.strains, 
+                                            circulating.strains = circulating.strains)
 
 plot_results(out, genetic.metrics) 
 

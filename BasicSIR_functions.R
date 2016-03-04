@@ -39,7 +39,6 @@ get_current <- function(population,timestep) {
 }
 
 
-
 #Mutate Strain and Recalculate frequencies 
 mutate.strain <- function(strain)  {
   strain <- current.haplotypes$strain[[j]] #Get selected strain from list of current haplotypes
@@ -50,17 +49,6 @@ mutate.strain <- function(strain)  {
   return(strain)
 }
   
-
-#calculate frequencies -can't get this to work yet 
-#calulate.mutated.frequencies <- function(current.haplotypes, og.strain.index, infected, strain.index, timestep) {
-  
-#  new.strain.frequency <- 1/infected[timestep]
-#  old.strain.frequency <- (current.haplotypes$frequencies[og.strain.index]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
-#  current.haplotypes$frequencies[og.strain.index] <- old.strain.frequency
-#  current.haplotypes$frequencies[strain.index] <- new.strain.frequency
-
-
-
 
 #calculate the diversity between all strains 
 get_diversity <- function(current.haplotypes) {
@@ -152,4 +140,98 @@ plot_results <- function(out, genetic.metrics) {
   legend("topleft", c("Total", "Current"), pch = 1, col = 2:3)
   lines(genetic.metrics$circulating.strains, col = 3)
   
+}
+
+check.with.current <- function(new.strain, current.haplotypes) {
+  num.strains <- length(current.haplotypes$hindex)
+  distance <- 0
+  for (i in 1:num.strains) {
+    if (distance > 0) { 
+      return
+      } else { 
+      calculated.distance <- get_distance(new.strain, current.haplotypes$strain[[i]])
+      if(calculated.distance == 0) {
+      distance = distance + 1
+      }
+    }
+  return(list(distance = distance, index = i))
+  }
+}
+
+add.newstrain.population <- function(population, new.strain, nex.gen.hap,index) {
+  new.strain.hindex <- length(population$hindex)+1
+  population$hindex[new.strain.hindex] <- new.strain.hindex
+  population$strain[[new.strain.hindex]] <- new.strain
+  new.strain.name <- paste("strain", new.strain.hindex, sep = ".")
+  population$frequency$new.strain.hindex <- rep(0, length(times))
+  names(population$frequency)[names(population$frequency) == 'new.strain.hindex'] <- new.strain.name
+  population$frequency[timestep+1,new.strain.hindex] <- nex.gen.hap$frequencies[index]    
+} 
+
+#function for collecting an index of a list
+split.list <- function(population, index) {
+  desired.hindex <- population$hindex[index]
+  desired.freq <- population$frequencies[index]
+  desired.strains <- population$strain[index]
+  return(list(hindex = desired.hindex, frequencies = desired.freq, strains = desired.strains))
+}
+
+
+#returns the indices of two sublists for strains that match in each-the indices that are returned are the strain indices in older population
+compare.two.list <- function(list1_new, list2_old) {
+  strains_1 <- list1_new$strains
+  strains_2 <- list2_old$strains
+  
+  num.unplaced.strains <- rep(0,length(list1_new$hindex))
+  
+  if (length(strains_2$hindex)==0) {
+    return
+  } else {
+    
+    for (m in 1:length(list1_new$hindex)) { #for how many different strains there are 
+      temp_strain <- strains_1[[m]]
+      for (k in 1:length(list2_old$hindex)) {
+        ancestor_strain <- strains_2[[k]]
+        distance <- get_distance(temp_strain, ancestor_strain)
+        if (distance == 0) num.unplaced.strains[m] <- k
+      }
+    }
+  }
+  return(num.unplaced.strains)
+}
+
+#function to add frequencies to ancestror strains that have not been in the population but have returned-why am I doing this, wouldn't it give an underestimation 
+#Just change it so that if it''s different you add a new strain
+# will have a new function at the end to compare which strains were the same, and compare 
+#update.ancestor.pop <- function(population, comparing.new.old, timestep, older.hindex, different.hindex, different.strains) {
+ # for (i in 1:length(comparing.new.old)) {
+  #  if (comparing.new.old[i] == 0) {
+      
+   #   new.strain.hindex <- length(population$hindex)+1
+    #  population$hindex[new.strain.hindex] <- new.strain.hindex
+     # population$strain[new.strain.hindex] <- different.strains$strains[i]
+      #new.strain.name <- paste("strain", new.strain.hindex, sep = ".")
+      #population$frequency$new.strain.hindex <- rep(0, length(times))
+      #names(population$frequency)[names(population$frequency) == 'new.strain.hindex'] <- new.strain.name
+     # population$frequency[timestep+1,new.strain.hindex] <- different.strains$frequencies[i]    
+      
+    #} else {
+    #  older.hindex <- comparing.new.old[i]
+   #   population$frequency[timestep+1, older.hindex] <- nex.gen.hap$frequencies[different.hindex[i]]
+  #  }
+ # }
+#  return(population)
+#}
+
+update.ancestor.pop <- function(population, different.strains) {
+  for (i in 1:length(different.strains$hindex)) {
+      new.strain.hindex <- length(population$hindex)+1
+      population$hindex[new.strain.hindex] <- new.strain.hindex
+      population$strain[new.strain.hindex] <- different.strains$strains[i]
+      new.strain.name <- paste("strain", new.strain.hindex, sep = ".")
+      population$frequency$new.strain.hindex <- rep(0, length(times))
+      names(population$frequency)[names(population$frequency) == 'new.strain.hindex'] <- new.strain.name
+      population$frequency[timestep+1,new.strain.hindex] <- different.strains$frequencies[i]  
+  }
+  return(population)
 }
