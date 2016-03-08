@@ -1,15 +1,3 @@
-library(deSolve)
-
-sir <- function(time, state, parameters) {
-  with(as.list(c(state, parameters)), {
-    dS <- -beta * S * I
-    dI <- beta * S * I - gamma * I
-    # dcumI <- beta*S*I
-    dR <- gamma * I
-    
-    return(list(c(dS, dI, dR)))
-  })
-}
 
 get_current <- function(population,timestep) {
   num.strains.pop <- length(population$hindex)
@@ -131,7 +119,7 @@ calculate_last.time.step <- function(times, population, diversity, divergence, t
 plot_results <- function(out, genetic.metrics) {
   par(mfrow = c(2,2))
   matplot(times, population.out, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
-  legend(40, 0.7, c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
+  legend("topright", c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
   
   
   plot(times, genetic.metrics$diversity, type = "l", xlab = "Time", ylab = "Diversity", main = 'SIR Model', col = "red")
