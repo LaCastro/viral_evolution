@@ -223,3 +223,22 @@ update.ancestor.pop <- function(population, different.strains) {
   }
   return(population)
 }
+
+plot.final <- function(simulation.metrics.master, times, beta, gamma) {
+  oma=c(0,0,3,0)
+  simulation.divergence <- simulation.metrics.master[[1]]
+  simulation.diversity <- simulation.metrics.master[[2]]
+  simulation.total.strains <- simulation.metrics.master[[3]]
+  simulation.num.strains <- simulation.metrics.master[[4]]
+  
+  par(mfrow = c(2,2))
+
+  matplot(times, simulation.divergence, type = "l", xlab = "Time", ylab = "Divergence", lwd = 1, lty = 1, bty = "l", 
+          col = 1:10, main =  paste("SIR Model: R0", round(beta/gamma, digits = 1), sep = " "))
+  matplot(times, simulation.diversity, type = "l", xlab = "Time", ylab = "Diversity", lwd = 1, lty = 1, bty = "l", col = 1:10)
+  matplot(times, simulation.total.strains, type = "l", xlab = "Time", ylab = "Total Number of Strains", lwd = 1, lty = 1, bty = "l", col = 1:10)
+  matplot(times, simulation.num.strains, type = "l", xlab = "Time", ylab = "Number of Circulating Strains", lwd = 1, lty = 1, bty = "l", col = 1:10)
+}
+
+colMax <- function(data) sapply(data, max, na.rm = TRUE)
+

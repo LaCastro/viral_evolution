@@ -1,31 +1,22 @@
 #Simulation for SIR 
 init <- c(S = 1-1e-5, I = 1e-5, 0.0) #1e-5
-parameters_vacc <- c(beta = 0.899, gamma = 0.14286, nu = 0.005)
-times <- seq(1, 50, by = 1)
-out.vacc <- as.data.frame(ode(y = init, times = times, func = sir_vacc, parms = parameters_vacc))
-out.vacc$time <- NULL
+beta = 0.199
+gamma  = 0.14286
+times <- seq(1, 300, by = 1)
 
-parameters <- c(beta = 0.899, gamma = 0.14286)
+parameters <- c(beta, gamma)
 out.regular <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
 out.regular$time <- NULL
 
 
-matplot(times, out.vacc, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model-Vaccination", lwd = 1, lty = 1, bty = "l", col = 2:4)
-legend("topright", c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
-
 matplot(times, out.regular, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
 legend("topright", c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
-
-
-
 
 population.out <- 10^5*out.regular #population x proportion to get numbers 
 
 
 #For use in the mutation simulation 
 infected <- population.out$I[1:length(times)]
-
-
 
 
 #Parameters for mutation model
@@ -36,10 +27,10 @@ day_mut_rate <- year_mut_rate / 365 #per site per day
 
 
 iterations <- 10
-genetic.diversity <- matrix(0, nrow = length(times), ncol = 10)
-genetic.divergence <- matrix(0, nrow = length(times), ncol = 10)
-number.strains <- matrix(0, nrow = length(times), ncol = 10)
-total.cumulative.strains <- matrix(0, nrow = length(times), ncol = 10)
+genetic.diversity.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
+genetic.divergence.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
+number.strains.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
+total.cumulative.strains.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
 
 
 #########################
@@ -208,14 +199,60 @@ for(d in 1:iterations) {
                                               diversity, divergence, total.strains = total.strains, 
                                               circulating.strains = circulating.strains)
   
-  plot_results(out, genetic.metrics) 
+  #plot_results(out, genetic.metrics) 
   
   
-  genetic.divergence[,d] <- genetic.metrics$divergence
-  genetic.diversity[,d] <- genetic.metrics$diversity
-  total.cumulative.strains[,d] <- genetic.metrics$total.strains
-  number.strains[,d] <- genetic.metrics$circulating.strains
+  genetic.divergence.master[,d] <- genetic.metrics$divergence
+  genetic.diversity.master[,d] <- genetic.metrics$diversity
+  total.cumulative.strains.master[,d] <- genetic.metrics$total.strains
+  number.strains.master[,d] <- genetic.metrics$circulating.strains
 }
 
 
+simulation.metrics.master <- list()
+simulation.metrics.master[[1]] <- genetic.divergence.master
+simulation.metrics.master[[2]] <- genetic.diversity.master
+simulation.metrics.master[[3]] <- total.cumulative.strains.master
+simulation.metrics.master[[4]] <- number.strains.master
+
+
+plot.final(simulation.metrics.master, times = times, beta = beta, gamma = gamma)
+
+divergence.range <- range(genetic.divergence.master[length(times),])
+peak.diversity <- range(colMax(genetic.diversity.master))
+peak.circulating.strains <- range(colMax(number.strains.master))
+total.strains <- range(colMax(total.cumulative.strains.master))
+
+divergence.range
+peak.diversity
+peak.circulating.strains
+total.strains
+
+r0 <- c(7, 6.3, 5.6, 4.9, 4.2, 3.5, 2.8 , 2.1, 1.4)
+
+diversity.min <- c(0.000130863, 0.000222379,0.000130615,0.000199917,0.000212935,0.000202281,0.000133215,0.00017862,	0.0006282)
+diversity.max <- c(0.001378452,	0.002430556,	0.002430556,	0.0025,	0.002109248,	0.001388889,	0.002476587,	0.003174316,	0.002383406)
+
+num.strains.min <- c(61,	61,	59,	59,	60,	49,	46,	36,	12)
+num.strains.max <- c(85,	73,	85,	84,	78,	73,	61,	58,	24)
+
+total.strains.min <- c(196,	186,	197,	190,	211,	179,	183,	166,	97)
+total.strains.max <- c(233,	231,	229,	233,	241,	238, 227,	201,	117)
+
+divergence.min <- rep(0, 9)
+divergence.max <- c(0,	0,	0,	0,	0,	0,	0.01,	0,	0.002537313)
+
+par(mfrow = (2,2))
+
+plot(r0, diversity.max, pch = 19, ylim = c(0, 0.005), main = "Peak Diversity")
+points(r0, diversity.min, pch = 19, col = "red")
+
+plot(r0, num.strains.max, pch = 19, ylim = c(0, max(num.strains.max)+5), main = "Number of Strains at Peak")
+points(r0, num.strains.min, pch = 19, col = "red")
+
+plot(r0, total.strains.max, pch = 19, ylim = c(0, max(total.strains.max)+5), main = "Total Strains")
+points(r0, total.strains.min, pch = 19, col = "red")
+
+plot(r0, divergence.max, pch = 19, ylim = c(0,max(divergence.max)+.01), main = "End Divergence")
+points(r0, divergence.min, pch = 19, col = "red")
 
