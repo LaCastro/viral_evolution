@@ -1,4 +1,5 @@
 require(deSolve)
+require(tictoc)
 
 #basic SIR 
 sir <- function(time, state, parameters) {

@@ -1,8 +1,8 @@
 #Simulation for SIR 
 init <- c(S = 1-1e-5, I = 1e-5, 0.0) #1e-5
-beta = 0.199
+beta = 0.999
 gamma  = 0.14286
-times <- seq(1, 300, by = 1)
+times <- seq(1, 70, by = 1)
 
 parameters <- c(beta, gamma)
 out.regular <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
@@ -26,7 +26,7 @@ year_mut_rate <- 1.8*10^-3
 day_mut_rate <- year_mut_rate / 365 #per site per day
 
 
-iterations <- 10
+iterations <- 100
 genetic.diversity.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
 genetic.divergence.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
 number.strains.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
@@ -36,8 +36,9 @@ total.cumulative.strains.master <- data.frame(matrix(0, nrow = length(times), nc
 #########################
 #Initialization of Population 
 #initalize diveristy and divergence vectors
-
+tic()
 for(d in 1:iterations) {
+  print(paste("Beginning Iteration", d, sep = "-"))
   diversity <- rep(0, length(times))
   divergence <- rep(0, length(times))
   total.strains <- rep(0, length(times))
@@ -57,7 +58,7 @@ for(d in 1:iterations) {
     
     #marking the time step 
     timestep <- times[i]
-    print(paste("timestep", timestep, sep = "-"))
+    #print(paste("timestep", timestep, sep = "-"))
     
     #calculate diversity and divergence for the timestep before the mutation and replication event
     total.strains[i] <- length(population$hindex)
@@ -113,12 +114,12 @@ for(d in 1:iterations) {
               old.strain.frequency <- (current.haplotypes$frequencies[j]*infected[timestep]-1)/infected[timestep] # new frequency of old strain
               if(old.strain.frequency < 0) {
                 old.strain.frequency <- 0
-                print(paste("old strain less than 0"))
+                # print(paste("old strain less than 0"))
               }
               current.haplotypes$frequencies[j] <- old.strain.frequency
-              print(current.haplotypes$frequencies[j])
+              
               current.haplotypes$frequencies[num.current.strains] <- new.strain.frequency
-              print(paste("frequency.after.mutation",sum(current.haplotypes$frequencies), sep = "-"))
+              #print(paste("frequency.after.mutation",sum(current.haplotypes$frequencies), sep = "-"))
             }
           }
         }
@@ -135,30 +136,34 @@ for(d in 1:iterations) {
     
     #list of new haplotypes
     nex.gen.hap <- list(hindex = current.haplotypes$hindex, frequencies = as.vector(new.strains)/num.new.infecteds, strain = current.haplotypes$strain)
-    print(paste("sum of freq after rep",sum(nex.gen.hap$frequencies), sep = "-"))
+    #print(paste("sum of freq after rep",sum(nex.gen.hap$frequencies), sep = "-"))
     #check if any have strains that were mutated have 0 frequency - i.e. mutated and didn't replicate 
     
     if (num.mutations > 0) { 
       temporary.strains <- which(nex.gen.hap$hindex == "temporary") #get what strains are temporary 
-      erase.strains <- c()
-      for(j in 1:length(temporary.strains)) { #for how many temporary strains there are 
-        if (nex.gen.hap$frequencies[temporary.strains[j]] == 0) { # if the don't have a frequency, store them to delete later
-          erase.strains <- c(erase.strains, j)
-        } 
-      }
-      #deleteing 0 frequencies 
-      if(length(erase.strains) > 0) {
-        nex.gen.hap$hindex <- nex.gen.hap$hindex[-temporary.strains[erase.strains]]
-        nex.gen.hap$frequencies <-nex.gen.hap$frequencies[-temporary.strains[erase.strains]]
-        nex.gen.hap$strain <- nex.gen.hap$strain[-temporary.strains[erase.strains]]
+      if(length(temporary.strains) > 0) {
+        erase.strains <- c()
+        
+        for(j in 1:length(temporary.strains)) { #for how many temporary strains there are 
+          if (nex.gen.hap$frequencies[temporary.strains[j]] == 0) { # if the don't have a frequency, store them to delete later
+            erase.strains <- c(erase.strains, j)
+          } 
+        }
+        
+        #deleteing 0 frequencies 
+        if(length(erase.strains) > 0) {
+          nex.gen.hap$hindex <- nex.gen.hap$hindex[-temporary.strains[erase.strains]]
+          nex.gen.hap$frequencies <-nex.gen.hap$frequencies[-temporary.strains[erase.strains]]
+          nex.gen.hap$strain <- nex.gen.hap$strain[-temporary.strains[erase.strains]]
+        }
       }
     }
     
-    print(paste("sum of freq in next gen",sum(nex.gen.hap$frequencies), sep = "-"))
+    #(paste("sum of freq in next gen",sum(nex.gen.hap$frequencies), sep = "-"))
     
     #update historical record 
     
-    print(paste("updatinghistorical.record", timestep, sep = "."))
+    #print(paste("updatinghistorical.record", timestep, sep = "."))
     
     new.hindex <- as.character(nex.gen.hap$hindex)
     pop.hindex <- as.character(population$hindex)
@@ -172,7 +177,7 @@ for(d in 1:iterations) {
     }
     
     different.hindex <- which(!new.hindex%in%pop.hindex) 
-    print("split differint index")
+    #print("split differint index")
     
     different.strains <- split.list(nex.gen.hap, different.hindex) #The different nex.gen.hap strain indcices 
     
@@ -188,10 +193,10 @@ for(d in 1:iterations) {
     
     if (length(different.hindex) > 0 ) {
       population <- update.ancestor.pop(population, different.strains)
-      print("entered this loop")
-      print(paste("sum of frequencies in next.gen", sum(population$frequency[timestep+1,]), sep  = "-"))
+      #print("entered this loop")
+      #print(paste("sum of frequencies in next.gen", sum(population$frequency[timestep+1,]), sep  = "-"))
     }
-    print(paste("sum of frequencies in next.gen", sum(population$frequency[timestep+1,]), sep  = "-"))
+    #print(paste("sum of frequencies in next.gen", sum(population$frequency[timestep+1,]), sep  = "-"))
   }
   
   #Last Time Step 
@@ -208,7 +213,6 @@ for(d in 1:iterations) {
   number.strains.master[,d] <- genetic.metrics$circulating.strains
 }
 
-
 simulation.metrics.master <- list()
 simulation.metrics.master[[1]] <- genetic.divergence.master
 simulation.metrics.master[[2]] <- genetic.diversity.master
@@ -223,36 +227,5 @@ peak.diversity <- range(colMax(genetic.diversity.master))
 peak.circulating.strains <- range(colMax(number.strains.master))
 total.strains <- range(colMax(total.cumulative.strains.master))
 
-divergence.range
-peak.diversity
-peak.circulating.strains
-total.strains
-
-r0 <- c(7, 6.3, 5.6, 4.9, 4.2, 3.5, 2.8 , 2.1, 1.4)
-
-diversity.min <- c(0.000130863, 0.000222379,0.000130615,0.000199917,0.000212935,0.000202281,0.000133215,0.00017862,	0.0006282)
-diversity.max <- c(0.001378452,	0.002430556,	0.002430556,	0.0025,	0.002109248,	0.001388889,	0.002476587,	0.003174316,	0.002383406)
-
-num.strains.min <- c(61,	61,	59,	59,	60,	49,	46,	36,	12)
-num.strains.max <- c(85,	73,	85,	84,	78,	73,	61,	58,	24)
-
-total.strains.min <- c(196,	186,	197,	190,	211,	179,	183,	166,	97)
-total.strains.max <- c(233,	231,	229,	233,	241,	238, 227,	201,	117)
-
-divergence.min <- rep(0, 9)
-divergence.max <- c(0,	0,	0,	0,	0,	0,	0.01,	0,	0.002537313)
-
-par(mfrow = (2,2))
-
-plot(r0, diversity.max, pch = 19, ylim = c(0, 0.005), main = "Peak Diversity")
-points(r0, diversity.min, pch = 19, col = "red")
-
-plot(r0, num.strains.max, pch = 19, ylim = c(0, max(num.strains.max)+5), main = "Number of Strains at Peak")
-points(r0, num.strains.min, pch = 19, col = "red")
-
-plot(r0, total.strains.max, pch = 19, ylim = c(0, max(total.strains.max)+5), main = "Total Strains")
-points(r0, total.strains.min, pch = 19, col = "red")
-
-plot(r0, divergence.max, pch = 19, ylim = c(0,max(divergence.max)+.01), main = "End Divergence")
-points(r0, divergence.min, pch = 19, col = "red")
+toc()
 
