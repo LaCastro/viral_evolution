@@ -106,8 +106,8 @@ init_population <- function(times, base_haplotype) {
   return(population)
 }
 
-calculate_last.time.step <- function(times, population, diversity, divergence, total.strains, circulating.strains) {
-  last.time.step <- length(times)
+calculate_last.time.step <- function(times.sim, population, diversity, divergence, total.strains, circulating.strains) {
+  last.time.step <- length(times.sim)
   total.strains[last.time.step] <- length(population$hindex)
   current.haplotypes <- get_current(population, last.time.step)  
   circulating.strains[last.time.step] <- length(current.haplotypes$hindex)
@@ -115,6 +115,8 @@ calculate_last.time.step <- function(times, population, diversity, divergence, t
   divergence[last.time.step] <- get_divergence(current.haplotypes, base_haplotype)
   return(list(diversity = diversity, divergence = divergence, total.strains = total.strains, circulating.strains = circulating.strains))
 }
+
+
 
 plot_results <- function(out, genetic.metrics) {
   par(mfrow = c(2,2))
@@ -230,14 +232,18 @@ plot.final <- function(simulation.metrics.master, times, beta, gamma) {
   simulation.diversity <- simulation.metrics.master[[2]]
   simulation.total.strains <- simulation.metrics.master[[3]]
   simulation.num.strains <- simulation.metrics.master[[4]]
+  simulation.mutations <- simulation.metrics.master[[5]]
+  simulation.infected <- simulation.metrics.master[[6]]
   
-  par(mfrow = c(2,2))
+  par(mfrow = c(2,3))
 
   matplot(times, simulation.divergence, type = "l", xlab = "Time", ylab = "Divergence", lwd = 1, lty = 1, bty = "l", 
           col = 1:10, main =  paste("SIR Model: R0", round(beta/gamma, digits = 1), sep = " "))
   matplot(times, simulation.diversity, type = "l", xlab = "Time", ylab = "Diversity", lwd = 1, lty = 1, bty = "l", col = 1:10)
   matplot(times, simulation.total.strains, type = "l", xlab = "Time", ylab = "Total Number of Strains", lwd = 1, lty = 1, bty = "l", col = 1:10)
   matplot(times, simulation.num.strains, type = "l", xlab = "Time", ylab = "Number of Circulating Strains", lwd = 1, lty = 1, bty = "l", col = 1:10)
+  matplot(times, simulation.mutations, type = "l", xlab = "Time", ylab = "Number of Mutations", lwd = 1, lty = 1, bty = 'l', col = 1:10)
+  matplot(times, simulation.infected, type = "l", xlab = "Time", ylab = "Infected", lwd = 1, lty = 1, bty = 'l', col = 1)
 }
 
 colMax <- function(data) sapply(data, max, na.rm = TRUE)

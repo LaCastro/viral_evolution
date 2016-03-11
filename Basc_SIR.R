@@ -2,7 +2,7 @@
 init <- c(S = 1-1e-5, I = 1e-5, 0.0) #1e-5
 beta = 0.999
 gamma  = 0.14286
-times <- seq(1, 70, by = 1)
+times <- seq(1, 80, by = 1)
 
 parameters <- c(beta, gamma)
 out.regular <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
@@ -15,8 +15,10 @@ legend("topright", c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 
 population.out <- 10^5*out.regular #population x proportion to get numbers 
 
 
+
 #For use in the mutation simulation 
-infected <- population.out$I[1:length(times)]
+infected <- population.out$I
+
 
 
 #Parameters for mutation model
@@ -26,11 +28,12 @@ year_mut_rate <- 1.8*10^-3
 day_mut_rate <- year_mut_rate / 365 #per site per day
 
 
-iterations <- 100
+iterations <- 20
 genetic.diversity.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
 genetic.divergence.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
-number.strains.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
+number.strains.master <- data.frame(matrix(0, nrow =length(times), ncol = iterations))
 total.cumulative.strains.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
+number.mutations.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
 
 
 #########################
@@ -43,6 +46,7 @@ for(d in 1:iterations) {
   divergence <- rep(0, length(times))
   total.strains <- rep(0, length(times))
   circulating.strains <- rep(0, length(times))
+  number.mutations <- rep(0, length(times))
   
   
   #initialize sequence 
@@ -75,6 +79,7 @@ for(d in 1:iterations) {
     #get expected number of mutations assuming one sequence per individual
     mean.mutation <- day_mut_rate*seq_len*infected[timestep]
     num.mutations <- rpois(1, mean.mutation)
+    number.mutations[i] <- num.mutations
     
     
     #If there are mutations....   
@@ -200,32 +205,42 @@ for(d in 1:iterations) {
   }
   
   #Last Time Step 
-  genetic.metrics <- calculate_last.time.step(times, population,
+  genetic.metrics <- calculate_last.time.step(times = times, population,
                                               diversity, divergence, total.strains = total.strains, 
                                               circulating.strains = circulating.strains)
   
-  #plot_results(out, genetic.metrics) 
+  par(mfrow = c(1,1))
+  plot_results(out, genetic.metrics) 
   
   
+  
+  
+  number.mutations.master[,d] <- number.mutations
   genetic.divergence.master[,d] <- genetic.metrics$divergence
   genetic.diversity.master[,d] <- genetic.metrics$diversity
   total.cumulative.strains.master[,d] <- genetic.metrics$total.strains
   number.strains.master[,d] <- genetic.metrics$circulating.strains
+  par(mfrow = c(1,1))
+  matplot(times, population$frequency, type = "l", xlab = "Time", ylab = "Frequency", main = "One Simulation R0 = 7", lwd = 1, lty = 1, bty = "l", col = 2:5)
 }
+
 
 simulation.metrics.master <- list()
 simulation.metrics.master[[1]] <- genetic.divergence.master
 simulation.metrics.master[[2]] <- genetic.diversity.master
 simulation.metrics.master[[3]] <- total.cumulative.strains.master
 simulation.metrics.master[[4]] <- number.strains.master
+simulation.metrics.master[[5]] <- number.mutations
+simulation.metrics.master[[6]] <- infected
 
 
-plot.final(simulation.metrics.master, times = times, beta = beta, gamma = gamma)
+plot.final(simulation.metrics.master, times, beta = beta, gamma = gamma)
 
-divergence.range <- range(genetic.divergence.master[length(times),])
-peak.diversity <- range(colMax(genetic.diversity.master))
-peak.circulating.strains <- range(colMax(number.strains.master))
-total.strains <- range(colMax(total.cumulative.strains.master))
+par(mfrow = c(2,2))
+divergence.range <- boxplot(genetic.divergence.master)
+peak.diversity <- boxplot(colMax(genetic.diversity.master), main = "Peak Diversity")
+peak.circulating.strains <- boxplot(colMax(number.strains.master), main = "Number of Circulating Strains at Peak")
+total.strains <- boxplot(colMax(total.cumulative.strains.master), main = "Cumulative Novel Strains")
 
 toc()
 
