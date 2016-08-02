@@ -1,4 +1,6 @@
 
+
+## Get the Current Strains in the Population 
 get_current <- function(population,timestep) {
   num.strains.pop <- length(population$hindex)
   
@@ -15,7 +17,7 @@ get_current <- function(population,timestep) {
     
     #Is this sequence present in the present timestep? If it is, record it 
     if (frequency > 0) {
-      total.present <- total.present+ 1
+      total.present <- total.present + 1
       present.sequences[[total.present]] <- strain
       present.frequences[total.present] <- frequency
       present.hindex[total.present] <- hindex
@@ -25,6 +27,7 @@ get_current <- function(population,timestep) {
   current.haplotypes <- list(hindex = present.hindex,frequencies =  present.frequences, strain = present.sequences)
   return(current.haplotypes)
 }
+
 
 
 #Mutate Strain and Recalculate frequencies 

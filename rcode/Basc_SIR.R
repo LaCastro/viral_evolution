@@ -1,4 +1,14 @@
+if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/zika_alarm/zika_code/')
+if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/zika_alarm/zika_code/')
+
+
+
 #Simulation for SIR 
+library(deSolve)
+source("rcode/disease_models.R")
+source("rcode/BasicSIR_functions.R")
+
+
 init <- c(S = 1-1e-5, I = 1e-5, 0.0) #1e-5
 beta = 0.999
 gamma  = 0.14286
@@ -8,17 +18,13 @@ parameters <- c(beta, gamma)
 out.regular <- as.data.frame(ode(y = init, times = times, func = sir, parms = parameters))
 out.regular$time <- NULL
 
-
 matplot(times, out.regular, type = "l", xlab = "Time", ylab = "Susceptibles and Recovereds", main = "SIR Model", lwd = 1, lty = 1, bty = "l", col = 2:4)
 legend("topright", c("Susceptibles", "Infecteds", "Recovereds"), pch = 1, col = 2:4)
 
 population.out <- 10^5*out.regular #population x proportion to get numbers 
 
-
-
 #For use in the mutation simulation 
 infected <- population.out$I
-
 
 
 #Parameters for mutation model
@@ -27,36 +33,45 @@ alphabet = c(1, 2, 3, 4)
 year_mut_rate <- 1.8*10^-3
 day_mut_rate <- year_mut_rate / 365 #per site per day
 
-
+# Number of times to run model 
 iterations <- 20
-genetic.diversity.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
-genetic.divergence.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
-number.strains.master <- data.frame(matrix(0, nrow =length(times), ncol = iterations))
-total.cumulative.strains.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
-number.mutations.master <- data.frame(matrix(0, nrow = length(times), ncol = iterations))
+
+
+## Creating dataframes to hold analysis 
+genetic.diversity.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
+genetic.divergence.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
+number.strains.master <- data.frame(matrix("numeric", nrow =length(times), ncol = iterations))
+total.cumulative.strains.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
+number.mutations.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
 
 
 #########################
 #Initialization of Population 
 #initalize diveristy and divergence vectors
 tic()
+
 for(d in 1:iterations) {
   print(paste("Beginning Iteration", d, sep = "-"))
-  diversity <- rep(0, length(times))
-  divergence <- rep(0, length(times))
-  total.strains <- rep(0, length(times))
-  circulating.strains <- rep(0, length(times))
-  number.mutations <- rep(0, length(times))
+  diversity <- vector("numeric", length(times))
+  divergence <- vector("numeric", length(times))
+  total.strains <- vector("numeric", length(times)) # For each time step number of new strains
+  circulating.strains <- vector("numeric", length(times)) 
+  number.mutations <- vector("numeric", length(times))
   
   
   #initialize sequence 
   
-  
   base_haplotype = rep(1, seq_len)
+  
+  #Population is defined for each time step by: 
+  #h index (keeping track of the number of total strains)
+  # frequency of each strain 
+  # strain sequences
   
   population <- init_population(times = times, base_haplotype = base_haplotype)
   
-  
+
+
   #Beginning Mutation and Drift 
   for (i in 1:(max(times)-1)) {
     
@@ -72,7 +87,7 @@ for(d in 1:iterations) {
     #num.current.strains <- length(current.haplotypes$hindex)
     circulating.strains[i] <- length(current.haplotypes$hindex)
     diversity[timestep] <- get_diversity(current.haplotypes)
-    divergence[timestep] <- get_divergence(current.haplotypes, base_haplotype)
+    divergence[timestep] <- get_divergence(current.haplotypes, base_haplotype) 
     
     
     
@@ -84,6 +99,7 @@ for(d in 1:iterations) {
     
     #If there are mutations....   
     if (num.mutations > 0) {    
+      
       #choose equal number of haplotypes as number of mutations from infected by their frequency in the population
       chosen.strains <- as.vector(rmultinom(n = 1, size = num.mutations, prob = current.haplotypes$frequencies))
       original.current.strains <- length(chosen.strains) #how many strains are there in the population to mutate
@@ -230,7 +246,7 @@ simulation.metrics.master[[1]] <- genetic.divergence.master
 simulation.metrics.master[[2]] <- genetic.diversity.master
 simulation.metrics.master[[3]] <- total.cumulative.strains.master
 simulation.metrics.master[[4]] <- number.strains.master
-simulation.metrics.master[[5]] <- number.mutations
+simulation.metrics.master[[5]] <- number.mutations.master
 simulation.metrics.master[[6]] <- infected
 
 
@@ -243,4 +259,5 @@ peak.circulating.strains <- boxplot(colMax(number.strains.master), main = "Numbe
 total.strains <- boxplot(colMax(total.cumulative.strains.master), main = "Cumulative Novel Strains")
 
 toc()
+
 
