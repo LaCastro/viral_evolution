@@ -14,7 +14,9 @@
 # This script can be freely used and shared as long as the author and 
 # copyright information in this header remain intact.
 ##################################################################################
-set.seed(578194)
+rm(list=ls())
+if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
+if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
 require("deSolve")
 source("sir_agent_func.R")
@@ -22,6 +24,8 @@ library(ggplot2)
 library(grid)
 library(gridExtra)
 library(cowplot)
+
+set.seed(578194)
 nrealisations = 50
 
 ##################################################################################
@@ -91,7 +95,6 @@ plot_deterministic <- ggplot(data = sirmodel, aes(x = time, y = I_N)) +
 
 #cat("The final size of epidemic from the deterministic model is ",max(sirmodel$R/N),"\n")
 
-
 ##################################################################################
 # now do several simulations using the agent based model, and overlay the
 # results on those from the deterministic model
@@ -111,24 +114,24 @@ for (iter in 1:nrealisations){
   
   vfinal = append(vfinal,myagent$final_size) 
 }
-
+vfinal <- data.frame(vfinal)
 runs.master.df <- do.call("rbind", runs) 
-
 
 stochastic <- ggplot(runs.master.df, aes(x = time, y = I, color = trial,  group = trial)) +   geom_line() + guides(color = FALSE) 
 
-
 combined <- ggplot() + 
-  geom_line(data = runs.master.df, aes(x = time, y = I, color = trial, group = trial), linetype = 2) + guides(color = FALSE) +
-  geom_line(data = sirmodel, aes(x = time, y = I_N), size = 3, show.legend = TRUE)  + 
+  geom_line(data = runs.master.df, aes(x = time, y = I, color = trial, group = trial)) + 
+  guides(color = FALSE) + 
+  geom_line(data = sirmodel, aes(x = time, y = I_N), linetype = 5, color = "red", size = 1.5)  + 
   labs(title = paste("Influenza pandemic in population of", N, sep = " "),
        x = "Time, in days", y = "Fraction infected (prevalence)") 
 
-legend("topright",legend=c("Deterministic","Agent Based simulation"),col=c(1,2),lwd=3,lty=c(1,3),bty="n")
 
+## Need to figure out how to put legend right
+#legend("topright",legend=c("Deterministic","Agent Based simulation"),col=c(1,2),lwd=3,lty=c(1,3),bty="n")
 
+final.size <- ggplot(data = vfinal, aes(vfinal)) + geom_histogram(binwidth = .025) + 
+  geom_vline(xintercept = max(sirmodel$R/N), size = 1.5, colour="red", linetype = "longdash") +
+  labs(x = "Distribution of epidemic final size", main = "", y = "Count")
 
-
-hist(vfinal,xlab="Distribution of epidemic final size",main="") # histogram the final size
-lines(c(max(sirmodel$R/N),max(sirmodel$R/N)),c(-1000,1000),col=4,lwd=2,lty=2)
-legend("topleft",legend=c("Agent Based simulation final size","Deterministic model final size"),col=c(1,4),lwd=2,lty=c(1,2),bty="n")
+plot_grid(combined, final.size, ncol = 1)

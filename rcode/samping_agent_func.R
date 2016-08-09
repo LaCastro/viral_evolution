@@ -1,5 +1,4 @@
 ##################################################################################
-##################################################################################
 # An R script to perform a stochastic epidemic simulation using an Agent Based model
 # (with homogenous mixing equivalent to an SIR model)
 #
@@ -8,12 +7,6 @@
 # Created: Feb 13, 2016
 #
 # Copyright Sherry Towers, 2016
-#
-# This script is not guaranteed to be free of bugs and/or errors
-#
-# This script can be freely used and shared as long as the author and 
-# copyright information in this header remain intact.
-##################################################################################
 
 ##################################################################################
 ##################################################################################
@@ -47,15 +40,17 @@ SIR_agent = function(N         # population size
   ########################################################################
   # now set up the state vector of the population
   # vstate = 0   means susceptible
-  # vstate = 1   means infected    
+  # vstate = 1   means infected 
+  # dstate = D   means infected and detected 
   # vstate = 2   means recovered   
   # lstate = types of strains 
   # randomly pick I_0 of the people to be infected
   ########################################################################
   vstate = rep(0,N)
+  rstate = rep("U", N)
   index_inf = sample(N,I_0) # randomly pick I_0 people from N
   vstate[index_inf] = 1     # these are the infected people
-
+  
   ########################################################################
   # now begin the time steps
   ########################################################################
@@ -82,7 +77,7 @@ SIR_agent = function(N         # population size
     if (delta_t==0){ # this is the calculation of a dynamic time step
       deltat = 1/(beta*I*S/N + gamma*I)
     }
-  
+    
     recover_prob = (1-exp(-gamma*deltat))
     
     # sample Poisson random numbers of infected people contacted by each person
