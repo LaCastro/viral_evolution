@@ -11,7 +11,7 @@
 ##################################################################################
 ##################################################################################
 ##################################################################################
-SIR_agent = function(N         # population size
+SIR_agent_detection = function(N         # population size
                      ,I_0       # initial number infected
                      ,S_0       # initial number susceptible
                      ,gamma     # recovery rate in days^{-1}
@@ -41,13 +41,13 @@ SIR_agent = function(N         # population size
   # now set up the state vector of the population
   # vstate = 0   means susceptible
   # vstate = 1   means infected 
-  # dstate = D   means infected and detected 
-  # vstate = 2   means recovered   
+  # vstate = 2   means infected and detected 
+  # vstate = 3   means recovered   
   # lstate = types of strains 
   # randomly pick I_0 of the people to be infected
   ########################################################################
   vstate = rep(0,N)
-  rstate = rep("U", N)
+  dstate = rep(0, N) # create state to keep track of who has been detected 
   index_inf = sample(N,I_0) # randomly pick I_0 people from N
   vstate[index_inf] = 1     # these are the infected people
   
@@ -55,19 +55,26 @@ SIR_agent = function(N         # population size
   # now begin the time steps
   ########################################################################
   t     = tbeg
-  S     = S_0
-  I     = I_0
+  S     = S_0  # This probably isn't necessary
+  I     = I_0 # This  probably isn't necessary 
+  D     = 0 # Maybe make this a variable that you'll be able to change 
+  CI    = I
+  
   vS    = numeric(0)  # this will be filled with the number of susceptibles in the population over time
   vI    = numeric(0)  # this will be filled with the number of infectives in the population over time
+  vD    = numeric(0)  # this will be filled with the number of infected and reported in the population over time
+  vCI   = numeric(0)  # this will be filled with the cumulative number of infected in the population
   vtime = numeric(0)  # this will be filled with the time steps
-  #recover_prob = (1-exp(-gamma*delta_t)) # the probability an infective recovers in this time step, # this probabaly doesn't have to be set each time? 
+  #vCI = append(vCI, CI)
   
   while (t<tend&I>0){ # continue the simulation until we have no more infectious people, or t>=tend
     S = length(vstate[vstate==0])  # count the number of susceptibles, based on the state vector 
     I = length(vstate[vstate==1])  # count the number of infectives, based on the state vector
-    
+    D = length(dstate[dstate==1]) # count the number of infected and reported in the population over time
+
     vS = append(vS,S)  # append this info to vectors that we will return from the function
     vI = append(vI,I)
+    vD = append(vD,D)
     
     vtime = append(vtime,t)
     
@@ -79,19 +86,38 @@ SIR_agent = function(N         # population size
     }
     
     recover_prob = (1-exp(-gamma*deltat))
+    reporting_prob = .015 # discovery rate for a tenth of a day, make this a variable 
     
     # sample Poisson random numbers of infected people contacted by each person
     avg_num_infected_people_contacted = beta*I*deltat/N
     vnum_infected_people_contacted = rpois(N,avg_num_infected_people_contacted) 
-    vprob = runif(N)   # sample uniform random numbers
+    which(vnum_infected_people_contacted == 1)
+    
+    prob = runif(N)   # sample uniform random numbers
     vnewstate = vstate # copy the state vector to a temporary vector used for calculations
     
-    # Infected people recover if the sampled uniform random
-    # number is less than the recovery probability
-    vnewstate[vstate==1&vprob<recover_prob] = 2              
     
     # If a susceptible contacted at least one infective, they are infected
     vnewstate[vstate==0&vnum_infected_people_contacted>0] = 1 
+    indices <- which(vstate==0&vnum_infected_people_contacted>0)
+    prob[indices]
+    
+    #keeping track of cumulative infections
+    CI = CI + length(indices)
+    vCI = append(vCI, CI)
+    
+    # Those that are reporting; allowed to report in the same time step as infected 
+    dnewstate = dstate
+    dnewstate[vnewstate==1&prob<reporting_prob] = 1
+    dstate = dnewstate
+ 
+    # Don't allow newly infected to recover in same time step
+    prob[indices] = 1 
+    
+    # Infected people recover if the sampled uniform random
+    # number is less than the recovery probability
+    vnewstate[vstate==1&prob<recover_prob] = 2              
+    
     
     vstate = vnewstate # update the state vector
     
@@ -100,7 +126,7 @@ SIR_agent = function(N         # population size
   final = 0
   if (length(vS)>0) final = 1-min(vS)/N
   
-  return(list(time=vtime,I=vI,S=vS,final_size=final))
+  return(list(time=vtime, I=vI, S=vS, D = vD, C = vCI, final_size=final))
   
 }
 

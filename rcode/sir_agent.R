@@ -15,7 +15,7 @@
 # copyright information in this header remain intact.
 ##################################################################################
 rm(list=ls())
-if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
+if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
 require("deSolve")
@@ -24,9 +24,7 @@ library(ggplot2)
 library(grid)
 library(gridExtra)
 library(cowplot)
-
-set.seed(578194)
-nrealisations = 50
+library(reshape2)
 
 ##################################################################################
 ##################################################################################
@@ -100,24 +98,34 @@ plot_deterministic <- ggplot(data = sirmodel, aes(x = time, y = I_N)) +
 # results on those from the deterministic model
 # myagent returns list of time, I, S, and final size 
 ##################################################################################
+set.seed(578194)
+nrealisations = 50
+
+
 vfinal = numeric(0) # we will fill this vector with the epidemic final size estimates from the simulations
 runs <- list()
 
-for (iter in 1:nrealisations){
-  myagent = SIR_agent(N = N,I_0 = I_0,S_0 = S_0,gamma = gamma,R0,tbeg,tend,delta_t)
-  
+#debug(SIR_agent_detection)
+undebug(SIR_agent_detection)
+
+for (iter in 1:nrealisations) {
+  #myagent = SIR_agent(N = N,I_0 = I_0,S_0 = S_0,gamma = gamma,R0,tbeg,tend,delta_t)
+  myagent = SIR_agent_detection(N = N, I_0=I_0, S_0=S_0, gamma = gamma, R0, tbeg, tend, delta_t) 
   I_sim = myagent$I/N
-  runs[[iter]] <- data.frame(trial = rep(iter, length(I_sim)), time = myagent$time, I = I_sim)
+  runs[[iter]] <- data.frame(trial = rep(iter, length(I_sim)), time = myagent$time, I = I_sim, D = myagent$D, C = myagent$C)
   #lines(myagent$time,myagent$I/N,lwd=2,col=(iter+1),lty=3)
 
   #cat(iter,nrealisations,"The final size of the epidemic from the agent based stochastic model is ",myagent$final_size,"\n")
   
   vfinal = append(vfinal,myagent$final_size) 
 }
+
 vfinal <- data.frame(vfinal)
 runs.master.df <- do.call("rbind", runs) 
 
 stochastic <- ggplot(runs.master.df, aes(x = time, y = I, color = trial,  group = trial)) +   geom_line() + guides(color = FALSE) 
+stochastic
+
 
 combined <- ggplot() + 
   geom_line(data = runs.master.df, aes(x = time, y = I, color = trial, group = trial)) + 
@@ -135,3 +143,34 @@ final.size <- ggplot(data = vfinal, aes(vfinal)) + geom_histogram(binwidth = .02
   labs(x = "Distribution of epidemic final size", main = "", y = "Count")
 
 plot_grid(combined, final.size, ncol = 1)
+vfinal
+
+
+# Detected vs Cumulative
+
+plot_prevalences <- function(df){
+  
+  df$disc_prob <- paste0(calculate.discover(df$disc_prob), "%")
+  
+  ggplot(df, aes(detected, median, color=as.factor(r_not), linetype=as.factor(disc_prob), fill=as.factor(r_not))) + 
+    geom_line(size=1)+
+    geom_ribbon(aes(ymax=max, ymin=min), alpha=0.1, color=NA)+
+    scale_y_log10(expand=c(0.01,0.01), limits=c(1,100), breaks = c(5,10,25,50,100))+
+    scale_x_continuous(expand=c(0.01,0.01), limits=c(0,30))+
+    scale_color_brewer(palette="Set1", direction = -1)+
+    scale_fill_brewer(palette="Set1", direction=-1)+
+    guides(linetype=FALSE)+
+    labs(x = "Cumulative Reported Cases", 
+         y = "Prevalence (log scale)", 
+         color = expression("R"[0]), 
+         fill = expression("R"[0]))
+}
+
+runs.master.m  <- melt(data = runs.master.df, id.vars = c( "trial","time"), measure.vars = c("D", "C"))
+
+sampling <- ggplot(runs.master.m, aes(x = time, y = value, color = as.factor(variable), linetype = as.factor(variable), fill = as.factor(variable))) +
+  geom_line(size = 1, alpha = 0.2) +
+  stat_summary(fun.y = "mean", color = "black", size = 1, geom = "line") + 
+  guides(linetype = FALSE) +
+  labs(x = "Time", y = "Number of Cases", color = "Type of Case")
+sampling
