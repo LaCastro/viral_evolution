@@ -1,25 +1,17 @@
 ##################################################################################
 ##################################################################################
 # An R script to perform a stochastic epidemic simulation using an
-# Agent Based Model and homogeneous mixing in the population.
-#
-# Author:  Sherry Towers
-#          smtowers@asu.edu
-# Created: Feb 12, 2016
-#
-# Copyright Sherry Towers, 2016
-#
-# This script is not guaranteed to be free of bugs and/or errors
-#
-# This script can be freely used and shared as long as the author and 
-# copyright information in this header remain intact.
-##################################################################################
+# Agent Based Model and homogeneous mixing in the population, while mutation is occuring 
+###################################################################################
+
 rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
 require("deSolve")
 source("sir_agent_func.R")
+source("samping_agent_func.R")
+source("evo_functions.R")
 library(ggplot2)
 library(grid)
 library(gridExtra)
@@ -27,86 +19,54 @@ library(cowplot)
 library(reshape2)
 
 ##################################################################################
+# Set up initial conditions and parameters 
 ##################################################################################
-# this is a function which, given a value of S,I and R at time t
-# calculates the time derivatives of S I and R
-# vparameters contains the parameters of the model, like the
-# recovery period, gamma, and the transmission rate, beta
-# this function gets passed to the deSolve package
-##################################################################################
-SIRfunc=function(t, x, vparameters){
-  S = x[1]  
-  I = x[2]  
-  R = x[3]  
-  if (I<0) I=0 
-  
-  with(as.list(vparameters),{
-    npop = S+I+R   
-    dS = -beta*S*I/npop            
-    dI = +beta*S*I/npop - gamma*I  
-    dR = +gamma*I                  
-    out = c(dS,dI,dR)
-    list(out)
-  })
-}
+set.seed(578194)
+nrealisations = 10
 
-
-
-##################################################################################
-##################################################################################
-# Set up initial conditions
-##################################################################################
+# Parameters for the epi model 
 N = 10000    # population size
-I_0 = 10     # number intially infected people in the population
+N = 1000  # Just for testing with a samller population 
+I_0 = 10 # number intially infected people in the population
+I_0 = 5 # Just for testing with a samller population 
 S_0 = N-I_0
 R_0 = 0      # assume no one has recovered at first
 
 delta_t = .1      # nominal time step
+delta_t = 1 # notmial time step for testing 
 tbeg  = 0           # begin day
-tend  = 120         # end day
+tend  = 120        # end day
 gamma = 1/3         # recovery period of influenza in days^{-1}
 R0    = 1.5         # R0 of a hypothetical strain of pandemic influenza
 beta = R0*gamma     # "reverse engineer" beta from R0 and gamma
 
-##################################################################################
-# first simulate the model with deterministic ODE's, so that we have something
-# to compare our stochastic simulation to.
-##################################################################################
-vt = seq(tbeg,tend,delta_t)
-vparameters = c(gamma=gamma,beta=beta)
-inits = c(S=S_0,I=I_0,R=R_0)
-
-sirmodel = as.data.frame(lsoda(y = inits, times = vt, func = SIRfunc, parms = vparameters))
-sirmodel$I_N = sirmodel$I/N #Getting Percentage Infected (Prevalence)
+# Parameters to set up the mutation model 
+seq_len <- 100
+alphabet = c(1, 2, 3, 4)
+year_mut_rate <-1.8*10^-2 #1.8*10^-3
+mut_rate <- year_mut_rate / 365 / delta_t #per site per day per delta t
 
 ##################################################################################
-# now plot the results of the deterministic model
+# Set up meta-analysis frames to keep track off 
 ##################################################################################
-#par(mfrow=c(2,1))  # divides the page into two plotting areas 
+epi_runs <- list()
+epi_size_final = numeric(0) # vector with the epidemic final size estimates from the simulations
 
-plot_deterministic <- ggplot(data = sirmodel, aes(x = time, y = I_N)) + 
-  geom_line(size = 3) + ylim(0, 1.5*max(sirmodel$I_N)) +  
-  labs(title = paste("Influenza pandemic in population of", N, sep = " "),
-       x = "Time, in days", y = "Fraction infected (prevalence)") + 
-  theme_cowplot() %+replace% theme(strip.background=element_blank(), strip.text.x = element_blank(),
- legend.title.align = 0.5,legend.position = c(0.2, 0.17)) 
+# Creating dataframes to hold mutation data
+genetic.diversity.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
+genetic.divergence.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
+number.strains.master <- data.frame(matrix("numeric", nrow =length(times), ncol = iterations))
+total.cumulative.strains.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
+number.mutations.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
 
-#cat("The final size of epidemic from the deterministic model is ",max(sirmodel$R/N),"\n")
-
-##################################################################################
-# now do several simulations using the agent based model, and overlay the
-# results on those from the deterministic model
-# myagent returns list of time, I, S, and final size 
-##################################################################################
-set.seed(578194)
-nrealisations = 50
+library(plyr)
+debug(sir_mutation_agent)
+trial1 <- sir_mutation_agent(N=N, I_0, S_0, gamma, R0 = R0 ,tbeg =tbeg , tend = tend, delta_t = delta_t , seq_len = seq_len, alphabet = alphabet, mut_rate = mut_rate) 
 
 
-vfinal = numeric(0) # we will fill this vector with the epidemic final size estimates from the simulations
-runs <- list()
 
-#debug(SIR_agent_detection)
-undebug(SIR_agent_detection)
+
+
 
 for (iter in 1:nrealisations) {
   #myagent = SIR_agent(N = N,I_0 = I_0,S_0 = S_0,gamma = gamma,R0,tbeg,tend,delta_t)
@@ -114,7 +74,7 @@ for (iter in 1:nrealisations) {
   I_sim = myagent$I/N
   runs[[iter]] <- data.frame(trial = rep(iter, length(I_sim)), time = myagent$time, I = I_sim, D = myagent$D, C = myagent$C)
   #lines(myagent$time,myagent$I/N,lwd=2,col=(iter+1),lty=3)
-
+  
   #cat(iter,nrealisations,"The final size of the epidemic from the agent based stochastic model is ",myagent$final_size,"\n")
   
   vfinal = append(vfinal,myagent$final_size) 
@@ -167,6 +127,7 @@ plot_prevalences <- function(df){
 }
 
 runs.master.m  <- melt(data = runs.master.df, id.vars = c( "trial","time"), measure.vars = c("D", "C"))
+
 
 sampling <- ggplot(runs.master.m, aes(x = time, y = value, color = as.factor(variable), linetype = as.factor(variable), fill = as.factor(variable))) +
   geom_line(size = 1, alpha = 0.2) +

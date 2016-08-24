@@ -1,11 +1,12 @@
-if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
+if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/zika_alarm/zika_code/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/zika_alarm/zika_code/')
+
 
 
 #Simulation for SIR 
 library(deSolve)
-source("disease_models.R")
-source("evo_functions.R")
+source("rcode/disease_models.R")
+source("rcode/BasicSIR_functions.R")
 
 
 init <- c(S = 1-1e-5, I = 1e-5, 0.0) #1e-5
@@ -180,7 +181,9 @@ for(d in 1:iterations) {
     }
     
     #(paste("sum of freq in next gen",sum(nex.gen.hap$frequencies), sep = "-"))
+    
     #update historical record 
+    
     #print(paste("updatinghistorical.record", timestep, sep = "."))
     
     new.hindex <- as.character(nex.gen.hap$hindex)
