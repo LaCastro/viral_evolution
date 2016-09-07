@@ -3,48 +3,43 @@
 # An R script to perform a stochastic epidemic simulation using an
 # Agent Based Model and homogeneous mixing in the population, while mutation is occuring 
 ###################################################################################
-
 rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-require("deSolve")
-source("sir_agent_func.R")
-source("samping_agent_func.R")
-source("evo_functions.R")
+sapply(c('sir_agent_func.R','evo_functions.R', 'sir_mutation_func.R'), source)
+
+library(deSolve)
 library(ggplot2)
 library(grid)
 library(gridExtra)
 library(cowplot)
 library(reshape2)
+library(plyr)
 
 ##################################################################################
 # Set up initial conditions and parameters 
 ##################################################################################
 set.seed(578194)
-nrealisations = 10
+nrealisations = 25
 
-# Parameters for the epi model 
-N = 10000    # population size
-N = 1000  # Just for testing with a samller population 
-I_0 = 10 # number intially infected people in the population
-I_0 = 5 # Just for testing with a samller population 
-S_0 = N-I_0
-R_0 = 0      # assume no one has recovered at first
+epi_mut_params <- function(N = 1000,
+                           I_0 = 10,
+                           S_0 = N-I_0,
+                           R_0 = 0,
+                           delta_t = 1, 
+                           tbeg = 1, 
+                           tend = 121,
+                           gamma = 1/3,
+                           R0 = 1.5, 
+                           beta = R0*gamma, 
+                           seq_len = 100,
+                           alphabet = c(1, 2, 3, 4),
+                           year_mut_rate = 1.8*10^-2, #1.8*10^-3
+                           mut_rate = year_mut_rate / 365 / delta_t) #per site per day per delta t)
+return(as.list(environment()))
 
-delta_t = .1      # nominal time step
-delta_t = 1 # notmial time step for testing 
-tbeg  = 0           # begin day
-tend  = 120        # end day
-gamma = 1/3         # recovery period of influenza in days^{-1}
-R0    = 1.5         # R0 of a hypothetical strain of pandemic influenza
-beta = R0*gamma     # "reverse engineer" beta from R0 and gamma
 
-# Parameters to set up the mutation model 
-seq_len <- 100
-alphabet = c(1, 2, 3, 4)
-year_mut_rate <-1.8*10^-2 #1.8*10^-3
-mut_rate <- year_mut_rate / 365 / delta_t #per site per day per delta t
 
 ##################################################################################
 # Set up meta-analysis frames to keep track off 
@@ -59,33 +54,32 @@ number.strains.master <- data.frame(matrix("numeric", nrow =length(times), ncol 
 total.cumulative.strains.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
 number.mutations.master <- data.frame(matrix("numeric", nrow = length(times), ncol = iterations))
 
-library(plyr)
-debug(sir_mutation_agent)
-trial1 <- sir_mutation_agent(N=N, I_0, S_0, gamma, R0 = R0 ,tbeg =tbeg , tend = tend, delta_t = delta_t , seq_len = seq_len, alphabet = alphabet, mut_rate = mut_rate) 
+params <- epi_mut_params(N = 10000, I_0 = 10, delta_t = 1)
+trial1 <- sir_mutation_agent(params)
+trial1$time_record
 
-
-
-
+strain.freq <- trial1$strain.freq
 
 
 for (iter in 1:nrealisations) {
-  #myagent = SIR_agent(N = N,I_0 = I_0,S_0 = S_0,gamma = gamma,R0,tbeg,tend,delta_t)
-  myagent = SIR_agent_detection(N = N, I_0=I_0, S_0=S_0, gamma = gamma, R0, tbeg, tend, delta_t) 
+  myagent = SIR_agent(N = N,I_0 = I_0,S_0 = S_0,gamma = gamma,R0,tbeg,tend,delta_t)
+  #myagent = SIR_agent_detection(N = N, I_0=I_0, S_0=S_0, gamma = gamma, R0, tbeg, tend, delta_t) 
+  #myagent = sir_mutation_agent(N = N, I_0=I_0, S_0=S_0, gamma = gamma, R0, tbeg, tend, delta_t) 
+ # myagent <- sir_mutation_agent(N=N, I_0, S_0, gamma, R0 = R0 ,tbeg =tbeg , tend = tend, delta_t = delta_t , seq_len = seq_len, alphabet = alphabet, mut_rate = mut_rate)
   I_sim = myagent$I/N
-  runs[[iter]] <- data.frame(trial = rep(iter, length(I_sim)), time = myagent$time, I = I_sim, D = myagent$D, C = myagent$C)
+  epi_runs[[iter]] <- data.frame(trial = rep(iter, length(I_sim)), time = myagent$time, I = I_sim) #, D = myagent$D, C = myagent$C)
   #lines(myagent$time,myagent$I/N,lwd=2,col=(iter+1),lty=3)
   
   #cat(iter,nrealisations,"The final size of the epidemic from the agent based stochastic model is ",myagent$final_size,"\n")
   
-  vfinal = append(vfinal,myagent$final_size) 
+  epi_size_final = append(epi_size_final, myagent$final_size) 
 }
 
-vfinal <- data.frame(vfinal)
-runs.master.df <- do.call("rbind", runs) 
+epi_size_final <- data.frame(epi_size_final)
+runs.master.df <- do.call("rbind", epi_runs) 
 
 stochastic <- ggplot(runs.master.df, aes(x = time, y = I, color = trial,  group = trial)) +   geom_line() + guides(color = FALSE) 
 stochastic
-
 
 combined <- ggplot() + 
   geom_line(data = runs.master.df, aes(x = time, y = I, color = trial, group = trial)) + 
@@ -98,10 +92,10 @@ combined <- ggplot() +
 ## Need to figure out how to put legend right
 #legend("topright",legend=c("Deterministic","Agent Based simulation"),col=c(1,2),lwd=3,lty=c(1,3),bty="n")
 
-final.size <- ggplot(data = vfinal, aes(vfinal)) + geom_histogram(binwidth = .025) + 
-  geom_vline(xintercept = max(sirmodel$R/N), size = 1.5, colour="red", linetype = "longdash") +
+final.size <- ggplot(data = epi_size_final, aes(epi_size_final)) + geom_histogram(binwidth = .025) + 
+  #geom_vline(xintercept = max(sirmodel$R/N), size = 1.5, colour="red", linetype = "longdash") +
   labs(x = "Distribution of epidemic final size", main = "", y = "Count")
-
+final.size
 plot_grid(combined, final.size, ncol = 1)
 vfinal
 

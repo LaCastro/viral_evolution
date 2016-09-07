@@ -1,22 +1,25 @@
 
-
-## Get the Current Strains in the Population 
-get_current <- function(population,timestep) {
+get_current_old <- function(population,timestep) {
+  # Get the Current Strains in the Population 
+  # These strains have a frequency greater than 0 
+  
   num.strains.pop <- length(population$hindex)
   
-  #get the population of present strains and their frequencies 
   present.sequences <- list()
   present.frequences <- c()
   present.hindex <- c()
   
   total.present <- 0
+  
   for (m in 1:num.strains.pop) {
     strain <- population$strain[[m]]
     frequency <- population$frequency[timestep,m] 
     hindex <- population$hindex[m]
     
-    #Is this sequence present in the present timestep? If it is, record it 
+   
     if (frequency > 0) {
+      # Is this sequence present in the present timestep? 
+      # If it is, record it 
       total.present <- total.present + 1
       present.sequences[[total.present]] <- strain
       present.frequences[total.present] <- frequency
@@ -24,18 +27,20 @@ get_current <- function(population,timestep) {
     } else {   
     }
   } 
-  current.haplotypes <- list(hindex = present.hindex,frequencies =  present.frequences, strain = present.sequences)
+  current.haplotypes <- list(hindex = present.hindex,
+                             frequencies =  present.frequences, strain = present.sequences)
   return(current.haplotypes)
 }
 
 
-
-## Get the Current Strains in the Population New as of 8/24 
-get_current <- function(population.strains, population.frequency, timestep) {
+get_current <- function(population.strains, 
+                        population.frequency, 
+                        timestep) {
+  # Get the Current Strains in the Population
+  # Current strains = frequency > 0 in last time step
+  # New as of 8/24 
 
   num.strains.pop <- ncol(population.frequency)
-  
-  #get the population of present strains and their frequencies 
   present.sequences <- list()
   present.frequences <- c()
   present.hindex <- c()
@@ -47,41 +52,38 @@ get_current <- function(population.strains, population.frequency, timestep) {
     frequency <- population.frequency[timestep,m] 
     hindex <- paste("s", m, sep = ".") 
     
-    #Is this sequence present in the present timestep? If it is, record it 
     if (frequency > 0 & !is.na(frequency)) {
+      # Is this sequence present in the present timestep?
+      # If it is, record it 
       total.present <- total.present + 1
       present.sequences[[total.present]] <- strain
       present.frequences[total.present] <- frequency
       present.hindex[total.present] <- hindex
       } 
   } 
-  current.haplotypes <- list(hindex = present.hindex,frequencies =  present.frequences, strain = present.sequences)
+  current.haplotypes <- list(hindex = present.hindex,
+                             frequencies =  present.frequences, 
+                             strain = present.sequences)
   return(current.haplotypes)
 }
 
 
 
 
-
-
-
-
-
-
-
-#Mutate Strain and Recalculate frequencies 
 mutate.strain <- function(strain)  {
-  strain <- current.haplotypes$strain[[j]] #Get selected strain from list of current haplotypes
-  baseindex <- round(runif(1, min = 1, max = seq_len)) # select an index to mutate
+  # Mutate Strain 
+  # Sample site and change nucleotide to other base
+  
+  baseindex <- round(runif(1, min = 1, max = seq_len)) 
   nucleotide <- strain[baseindex]
   possible.mutations <- alphabet[which(alphabet != nucleotide)]
-  strain[baseindex] <- sample(possible.mutations, 1) #Mutate the strain to any of the other options
+  strain[baseindex] <- sample(possible.mutations, 1) 
   return(strain)
 }
   
 
-#calculate the diversity between all strains 
 get_diversity <- function(current.haplotypes) {
+  # calculate the diversity between all strains 
   num.of.strains <- length(current.haplotypes$frequencies)
   diversity = 0
   if (num.of.strains > 1) {
@@ -102,9 +104,9 @@ get_diversity <- function(current.haplotypes) {
 }
 
 
-#calculate the distance between two particular strains 
-#This is working 
 get_distance <- function(strain_a, strain_b) {
+  # calculate the genetic distance 
+  # between two particular strains 
   differences = 0
   for(i in 1:length(strain_a)) {
     if((strain_a[i]-strain_b[i]) != 0) {
@@ -133,9 +135,9 @@ get_divergence <- function(current.haplotypes, base_haplotype) {
 # changing this 8/24
 
 init_population <- function(base_haplotype) {
-#init_population <- function(times, base_haplotype) {
-  #Setting up the population list to store haplotypes through time 
-  #frequency.df <- data.frame(rep(0, times)) #storing the frequencies of each strain
+  # init_population <- function(times, base_haplotype) {
+  # Setting up the population list to store haplotypes through time 
+  # frequency.df <- data.frame(rep(0, times)) #storing the frequencies of each strain
   frequency.df <- data.frame(0)
   colnames(frequency.df) <- paste("strain",1, sep = ".")
   
@@ -153,19 +155,14 @@ init_population <- function(base_haplotype) {
 }
 
 
-# Version 2 
 init_population_strain <- function(base_haplotype) {
-  #init_population <- function(times, base_haplotype) {
-  #Setting up the population list to store haplotypes through time 
-  
-  #List of strains 
+  # Initialize list to store strains 
   strains <- list("s.1" = base_haplotype)
   return(strains)
 }
 
 init_population_freqdf <- function(base_haplotype) {
-  #Setting up the population frequency database to store frequencies through time 
-  #frequency.df <- data.frame(rep(0, times)) #storing the frequencies of each strain
+  # Initialize dataframe to store frequencies 
   frequency.df <- data.frame(0)
   colnames(frequency.df) <- paste("s", 1, sep = ".")
   frequency.df[1,1] <- 1
@@ -182,7 +179,6 @@ calculate_last.time.step <- function(times.sim, population, diversity, divergenc
   divergence[last.time.step] <- get_divergence(current.haplotypes, base_haplotype)
   return(list(diversity = diversity, divergence = divergence, total.strains = total.strains, circulating.strains = circulating.strains))
 }
-
 
 
 plot_results <- function(out, genetic.metrics) {
