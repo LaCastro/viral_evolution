@@ -43,15 +43,17 @@ return(as.list(environment()))
 ##################################################################################
 # Set up meta-analysis frames to keep track off 
 ##################################################################################
+params <- epi_mut_params(N = 1000, I_0 = 10, delta_t = 1, R0 = 2)
+
 epi_runs <- list()
 epi_size_final = numeric(0) # vector with the epidemic final size estimates from the simulations
-nrealisations = 25
+nrealisations = 100
 
-params <- epi_mut_params(N = 10000, I_0 = 10, delta_t = 1)
+
 
 for (iter in 1:nrealisations) {
   myagent = sir_mutation_agent(params)
-  epi_runs[[iter]] <- data.frame(trial = rep(iter, nrow(myagent$time_record)), myagent$time_record) #, D = myagent$D, C = myagent$C)
+  epi_runs[[iter]] <- data.frame(trial = rep(iter, nrow(myagent$time_record)), myagent$time_record) 
   epi_size_final = append(epi_size_final, myagent$final_size) 
 }
 
@@ -71,7 +73,7 @@ number.circulating.strains <- ggplot(runs.master.df, aes(x = vtime, y = cir.stra
 number.circulating.strains
 
 
-stochastic.diversity <- ggplot(runs.master.df, aes(x = vtime, y = diverge, color = trial, group = trial)) + 
+stochastic.diversity <- ggplot(runs.master.df, aes(x = vtime, y = diversity, color = trial, group = trial)) + 
   geom_line() + guides(color = FALSE)
 stochastic.diversity
 

@@ -70,24 +70,44 @@ sir_mutation_agent = function(params) {
       num.mutations <- rpois(1, mean.mutation)
       
       if (num.mutations > 0) {    
-       
-        # choose indices from Current Infecteds
-        mut.current.index = sample(current.inf.index, num.mutations, 
-                                   replace = FALSE) # Same strain can't mutate twice  
+        ## possible add a section if there is only one infected 
         
-        for (j in 1:num.mutations) { 
-          # For each of the mutation get original strain
-          # Mutate strain and update strain state
-          # Add new strain to the population 
+        if (length(current.inf.index) == 1) {
+          for(i in 1:num.mutations) {
+            original.strain.index = strain.state[current.inf.index] 
+            
+            original.strain = population.strains[[original.strain.index]]  
+            
+            new.strain = mutate.strain(original.strain, alphabet, seq_len)
+            new.strain.index <- length(population.strains)+1
+            strain.state[mut.current.index[j]] <- new.strain.index  # update strain index of population
+            
+            population.frequency[new.strain.index] <- numeric()  # Add frequency marker to tell if eventually replicates
+            population.strains[[new.strain.index]] <- new.strain
+          }
+        } else {
+          # choose indices from Current Infecteds
+          mut.current.index = sample(x = current.inf.index,size =  num.mutations, 
+                                     replace = FALSE) # Same strain can't mutate twice  
           
-          original.strain.index = strain.state[mut.current.index[j]] 
-          original.strain = population.strains[[original.strain.index]]  
-          new.strain = mutate.strain(strain = original.strain)
-          new.strain.index <- length(population.strains)+1
-          strain.state[mut.current.index[j]] <- new.strain.index  # update strain index of population
           
-          population.frequency[new.strain.index] <- numeric()  # Add frequency marker to tell if eventually replicates
-          population.strains[[new.strain.index]] <- new.strain
+          for (j in 1:num.mutations) { 
+            
+            # For each of the mutation get original strain
+            # Mutate strain and update strain state
+            # Add new strain to the population 
+            
+            original.strain.index = strain.state[mut.current.index[j]] 
+            
+            original.strain = population.strains[[original.strain.index]]  
+            
+            new.strain = mutate.strain(original.strain, alphabet, seq_len)
+            new.strain.index <- length(population.strains)+1
+            strain.state[mut.current.index[j]] <- new.strain.index  # update strain index of population
+            
+            population.frequency[new.strain.index] <- numeric()  # Add frequency marker to tell if eventually replicates
+            population.strains[[new.strain.index]] <- new.strain
+          }
         }
       } 
       

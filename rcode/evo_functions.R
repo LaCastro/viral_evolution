@@ -67,13 +67,9 @@ get_current <- function(population.strains,
   return(current.haplotypes)
 }
 
-
-
-
-mutate.strain <- function(strain)  {
+mutate.strain <- function(strain, alphabet, seq_len)  {
   # Mutate Strain 
   # Sample site and change nucleotide to other base
-  
   baseindex <- round(runif(1, min = 1, max = seq_len)) 
   nucleotide <- strain[baseindex]
   possible.mutations <- alphabet[which(alphabet != nucleotide)]
