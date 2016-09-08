@@ -7,7 +7,7 @@ rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-sapply(c('sir_agent_func.R','evo_functions.R', 'sir_mutation_func.R'), source)
+sapply(c('sir_agent_func.R','evo_functions.R', 'sir_mutation_func.R', 'analyze_saved_sims.R', 'plotting_functions.R'), source)
 
 library(deSolve)
 library(ggplot2)
@@ -18,7 +18,7 @@ library(reshape2)
 library(plyr)
 
 ##################################################################################
-# Set up initial conditions and parameters 
+# Set up initial functions to designate parameters and multiple runs 
 ##################################################################################
 set.seed(578194)
 
@@ -38,31 +38,54 @@ epi_mut_params <- function(N = 1000,
                            mut_rate = year_mut_rate / 365 / delta_t) #per site per day per delta t)
 return(as.list(environment()))
 
-
+run_mutate_branches_inc <- function(num_reps, ...) {
+  rlply(.n = num_reps, .expr = sir_mutation_agent(...) ) 
+}
 
 ##################################################################################
 # Set up meta-analysis frames to keep track off 
 ##################################################################################
-params <- epi_mut_params(N = 1000, I_0 = 10, delta_t = 1, R0 = 2)
-
-epi_runs <- list()
-epi_size_final = numeric(0) # vector with the epidemic final size estimates from the simulations
+params <- epi_mut_params(N = 1000, I_0 = 10, delta_t = 1)
 nrealisations = 100
 
+trial <- run_mutate_branches_inc(num_reps = nrealisations, params)
 
 
-for (iter in 1:nrealisations) {
-  myagent = sir_mutation_agent(params)
-  epi_runs[[iter]] <- data.frame(trial = rep(iter, nrow(myagent$time_record)), myagent$time_record) 
-  epi_size_final = append(epi_size_final, myagent$final_size) 
-}
+#Getting Final Sizes (Proportions of each outbreak)
+epi.size.all <- epi_size_all(trial = trial) 
 
-epi_size_final <- data.frame(epi_size_final)
-runs.master.df <- do.call("rbind", epi_runs) 
+## Getting Combined Time Records
+time.records.all <- time_records_all(trial)
 
-stochastic.vI <- ggplot(runs.master.df, aes(x = vtime, y = vI, color = trial,  group = trial)) +  
+
+## Combining 
+strain.records.all <- strain_freq_all(trial)
+
+
+### Plotting 
+
+time.max.diversity <- all_time_max_diversity(time.records.all)
+time.max.infected <- all_time_max_infected(time.records.all)
+
+
+debug(plot_max_times)
+
+plot_max_times(time.records.all, type = "divergence")
+
+
+
+## Histograms 
+plot_final_sizes(epi.size.all)
+plot_max_divergence(time.records.all)
+plot_max_diversity(time.records.all)
+
+
+### Line Plots 
+combined.time.records <- combine_time_records(time.records.all)
+stochastic.vI <- ggplot(combined.time.records, aes(x = vtime, y = vI, color = iter,  group = iter)) +  
   geom_line() + guides(color = FALSE) 
 stochastic.vI
+
 
 stochastic.diverge <- ggplot(runs.master.df, aes(x = vtime, y = diverge, color = trial,  group = trial)) +  
   geom_line() + guides(color = FALSE) 
@@ -72,21 +95,14 @@ number.circulating.strains <- ggplot(runs.master.df, aes(x = vtime, y = cir.stra
   geom_line() + guides(color = FALSE)
 number.circulating.strains
 
-
 stochastic.diversity <- ggplot(runs.master.df, aes(x = vtime, y = diversity, color = trial, group = trial)) + 
   geom_line() + guides(color = FALSE)
 stochastic.diversity
 
 
-final.size <- ggplot(data = epi_size_final, aes(epi_size_final)) + geom_histogram(binwidth = .025) + 
-  #geom_vline(xintercept = max(sirmodel$R/N), size = 1.5, colour="red", linetype = "longdash") +
-  labs(x = "Distribution of epidemic final size", main = "", y = "Count")
-final.size
-
-# Detected vs Cumulative
-runs.master.m  <- melt(data = runs.master.df, id.vars = c( "trial","time"), measure.vars = c("D", "C"))
 
 
+### Left over from sampling 
 sampling <- ggplot(runs.master.m, aes(x = time, y = value, color = as.factor(variable), linetype = as.factor(variable), fill = as.factor(variable))) +
   geom_line(size = 1, alpha = 0.2) +
   stat_summary(fun.y = "mean", color = "black", size = 1, geom = "line") + 

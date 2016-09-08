@@ -77,7 +77,6 @@ mutate.strain <- function(strain, alphabet, seq_len)  {
   return(strain)
 }
   
-
 get_diversity <- function(current.haplotypes) {
   # calculate the diversity between all strains 
   num.of.strains <- length(current.haplotypes$frequencies)
