@@ -108,5 +108,24 @@ all_time_max_diverge <- function(x) {
 }
 
 
+# Get Divergence/Diversity Estimates when 
+# 10% of the population is still infected 
+
+threshold_metrics <- function(threshold, N, records.list) {
+  metrics.all <- ldply(records.list, .fun = function(x) {
+    number.individuals <- threshold * N
+    rows <- which(x[, "vI"] < number.individuals)
+    diff.rows <- diff(rows)
+    index = which.max(diff.rows)+1 ## Check to see if this is working 
+    
+    metrics <- cbind(x[rows[index], "diverge"], x[rows[index], "diversity"], x[rows[index], "vtime"])
+    return(metrics)
+  })
+  colnames(metrics.all) <- c("diverge", "diversity", "time")
+  return(metrics.all)
+}
+
+
+
 
 
