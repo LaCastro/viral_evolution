@@ -75,6 +75,7 @@ SIR_agent_detection = function(N         # population size
     vS = append(vS,S)  # append this info to vectors that we will return from the function
     vI = append(vI,I)
     vD = append(vD,D)
+  
     
     vtime = append(vtime,t)
     
@@ -91,7 +92,7 @@ SIR_agent_detection = function(N         # population size
     # sample Poisson random numbers of infected people contacted by each person
     avg_num_infected_people_contacted = beta*I*deltat/N
     vnum_infected_people_contacted = rpois(N,avg_num_infected_people_contacted) 
-    which(vnum_infected_people_contacted == 1)
+    #which(vnum_infected_people_contacted == 1)
     
     prob = runif(N)   # sample uniform random numbers
     vnewstate = vstate # copy the state vector to a temporary vector used for calculations
@@ -99,8 +100,8 @@ SIR_agent_detection = function(N         # population size
     
     # If a susceptible contacted at least one infective, they are infected
     vnewstate[vstate==0&vnum_infected_people_contacted>0] = 1 
-    indices <- which(vstate==0&vnum_infected_people_contacted>0)
-    prob[indices]
+    indices <- which(vstate==0&vnum_infected_people_contacted>0) # these are the same 
+    #prob[indices]
     
     #keeping track of cumulative infections
     CI = CI + length(indices)
@@ -108,16 +109,17 @@ SIR_agent_detection = function(N         # population size
     
     # Those that are reporting; allowed to report in the same time step as infected 
     dnewstate = dstate
+    #which(vnewstate == 1 & prob<reporting_prob)
     dnewstate[vnewstate==1&prob<reporting_prob] = 1
     dstate = dnewstate
  
     # Don't allow newly infected to recover in same time step
-    prob[indices] = 1 
+    #prob[indices] = 1 
     
     # Infected people recover if the sampled uniform random
     # number is less than the recovery probability
     vnewstate[vstate==1&prob<recover_prob] = 2              
-    
+    #which(vstate == 1 & prob < recover_prob)
     
     vstate = vnewstate # update the state vector
     

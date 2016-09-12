@@ -188,11 +188,15 @@ SIR_agent_erlang = function(N         # population size
     }
     
     # the probability an infective recovers in this time step
-    theta = 1/(gamma*k)
-    a = 1-pgamma(vsojourn,shape=k,scale=theta)
-    recover_prob = rep(1,N)
-    l = which(a>1e-4)
+    theta = 1/(gamma*k) # scale factor for the gamma distribution, this never changes 
+    a = 1-pgamma(vsojourn,shape=k,scale=theta) # the probability that they are still in the compartment
+    
+    recover_prob = rep(1,N) # just setting up the vector to remember 
+    l = which(a>1e-4) # not sure if this ever changes?
+    
     recover_prob[l] = (pgamma(vsojourn[l]+deltat,shape=k,scale=theta)-pgamma(vsojourn[l],shape=k,scale=theta))/a[l]
+      #getting the probability of delta t
+
     
     # sample Poisson random numbers of infected people contacted by each person
     avg_num_infected_people_contacted = beta*I*deltat/N
@@ -200,7 +204,7 @@ SIR_agent_erlang = function(N         # population size
     vprob = runif(N)   # sample uniform random numbers
     vnewstate = vstate # copy the state vector to a temporary vector used for calculations
     
-    vsojourn = vsojourn+deltat
+    vsojourn = vsojourn+deltat # adding the time step to track how long each person has been in a sate 
     # Infected people recover if the sampled uniform random number is less than the recovery probability
     vnewstate[vstate==1&vprob<recover_prob] = 2              
     # reset the time they have spent in their new state to zero!
