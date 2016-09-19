@@ -55,7 +55,7 @@ R_0 = 0      # assume no one has recovered at first
 delta_t = .1      # nominal time step
 tbeg  = 0           # begin day
 tend  = 120         # end day
-gamma = 1/3         # recovery period of influenza in days^{-1}
+gamma = 1/5         # recovery period of influenza in days^{-1}
 R0    = 1.5         # R0 of a hypothetical strain of pandemic influenza
 beta = R0*gamma     # "reverse engineer" beta from R0 and gamma
 

@@ -16,6 +16,7 @@ library(gridExtra)
 library(cowplot)
 library(reshape2)
 library(plyr)
+library(dplyr)
 
 fig_path = "~/Documents/projects/viral_evolution/viral_evolution_repo/figs/"
 
@@ -53,17 +54,19 @@ nrealisations = 100
 N = c(100, 1000, 10000)
 r0_seq = seq(1,4, 0.5)
 
-data_path <- "~/Documents/projects/viral_evolution/data/"
+data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/"
 
 ## multiple parameter combinations, could feed this a_ply 
 
 
-# try calling these a different variable, the j/i might not be a problem 
+### need to do this but for the strain frequencies 
+ 
 for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,
                                      params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = 1))
      filename <- paste0(data_path,"trial_rnott", r0_seq[r0], "_N", N[size])
+     
      time.records <- time_records_all(trial)
      
      save(time.records, file = paste0(filename, ".RData"))
@@ -78,6 +81,7 @@ epi.size.all <- epi_size_all(trial = trail_1.5_10e4)
 ### Reading all desired data and combining for analysis 
 fig_path <- "~/Documents/projects/viral_evolution/figs/"
 data_path <- "~/Documents/projects/viral_evolution/data/"
+
 file.list <- get_vec_of_files(dir_path = data_path, r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
 data.files <- data.frame(cbind(combos, file.list))
@@ -108,7 +112,7 @@ save_plot(paste0(fig_path, "max.metric.plot.pdf"), max.metric.plot, base_height 
 
 
 ######## Code for Combing threshold metrics and plotting 
-threshold.metrics.master <- adply(.data = data.files, .margins = 1, function(x) {
+threshold.metrics.master <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   rnott = as.numeric(sub("_.*", "", x$combos))
   pop.size = as.numeric(sub(".*_", "", x$combos))
@@ -129,7 +133,56 @@ save_plot(paste0(fig_path, "threshold.metric.plot.1v2.pdf"), threshold.plot, bas
 
 
 
+######## Code for combining beginning threshold metrics and plotting 
+beg.threshold.metrics.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  threshold.metrics = beginning_threshold_metrics(threshold = .1, pop.size, records.list = time.records, rnott = rnott)
+  threshold.metrics = cbind(rep(pop.size, nrow(threshold.metrics)), threshold.metrics)
+  colnames(threshold.metrics)[1] <- "pop.size"
+  return(threshold.metrics)
+})
 
+
+beg.threshold.metrics.m <- melt(data = beg.threshold.metrics.master, id.vars = c("rnott", "pop.size"), 
+                            measure.vars = c("diverge", "diversity"))
+colnames(beg.threshold.metrics.m) <- c("rnott", "pop.size", "type", "value") 
+threshold.plot <-ggplot(beg.threshold.metrics.m, aes(factor(rnott), value)) + 
+  facet_grid(pop.size~type) +
+  geom_boxplot()+
+  labs(x = expression("R"[0]), y = "Distance")
+save_plot(paste0(fig_path, "beg.threshold.metric.plot.pdf"), threshold.plot, base_height = 8, base_aspect_ratio = 1.2)
+
+
+
+###### Code to compare the average rate at which mutations accumulate depending on R0 
+
+cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  meta.data = data.frame(cbind(rnott, pop.size))
+  cum.strains.trial = combine_mutations(time.records = time.records)
+  cum.strains.trial = cbind(meta.data, cum.strains.trial)
+  return(cum.strains.trial)
+})
+
+## This works! 
+cum.strains.groups <- group_by(cum.strains.master, rnott, pop.size, vtime)
+cum.strains.avg <- summarise(cum.strains.groups, avg.strains = mean(cum.strains), sd.strains = sd(cum.strains))
+
+
+# plot the average increase for each rnott, pop.size 
+increase.mutations <- ggplot(cum.strains.avg, aes(x = vtime, y = avg.strains)) +
+  geom_ribbon(aes(ymin = (avg.strains -sd.strains), ymax = (avg.strains + sd.strains)),
+                                  alpha = .5, fill="steelblue2", color="steelblue2") +
+  geom_line(color = "black", lwd = 1) +
+  facet_grid(pop.size~rnott) +
+  theme(panel.margin = unit(1.5, "lines")) + 
+  labs(x = "Time", y = "Number of Cumulative Mutations")
+  
+save_plot(paste0(fig_path, "increase.mutations.plot.pdf"), increase.mutations, base_height = 8, base_aspect_ratio = 1.75)
 
 
 
@@ -215,7 +268,7 @@ head(strains.data.master)
 #                    measure.vars = c("diversity", "divergence"))
 
 
-head(strains.time)
+
 time.scatter.strains <- ggplot(data = strains.data.master, aes(x = infected, y = num.strains)) + 
   geom_point() +
   geom_abline(intercept = 0, slope = 1) +

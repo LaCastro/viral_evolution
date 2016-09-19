@@ -45,6 +45,7 @@ combine_time_records <- function(time.records.all) {
 
 strain_freq_all <- function(trial) {
   ## function to combine records 
+  ## can make the second step faster, do this! 
   strain.records <-llply(.data = trial, .fun = function(x) {
     s.records  <- x$strain.freq
     return(s.records)
@@ -54,6 +55,7 @@ strain_freq_all <- function(trial) {
   }
   return(strain.records)
 }
+
 
 ###################  Finding Maximum Functions
 
@@ -111,13 +113,13 @@ all_time_max_diverge <- function(x) {
 # Get Divergence/Diversity Estimates when 
 # 10% of the population is still infected 
 
-threshold_metrics <- function(threshold, N, records.list, rnott) {
+end_threshold_metrics <- function(threshold, N, records.list, rnott) {
   metrics.all <- ldply(records.list, .fun = function(x) {
     number.individuals <- threshold * N
     # first check to see if it ever reaches that level of individuals 
     max.infected = max_infected(x = x)
     if (max.infected > number.individuals) {
-      rows <- which(x[, "vI"] < number.individuals)
+     
       diff.rows <- diff(rows)
       index = which.max(diff.rows)+1 ## Check to see if this is working 
       
@@ -132,6 +134,35 @@ threshold_metrics <- function(threshold, N, records.list, rnott) {
   return(metrics.all)
 }
  
+
+beginning_threshold_metrics <- function(threshold, N, records.list, rnott) {
+  metrics.all <- ldply(records.list, .fun = function(x) {
+    number.individuals <- threshold * N
+    time.of.max <- time_max_infected(x = x)
+    below.threshold <- filter(x,vI < number.individuals, vtime < time.of.max)
+    #browser()
+    if (nrow(below.threshold) == 0) {
+      index = 0 
+      return()
+    } 
+    else if (nrow(below.threshold) == 1) {
+     # browser()
+      index = below.threshold$vtime + 1
+    } 
+    else {
+      # should just be the last row in this 
+      #browser()
+      index = which.max(below.threshold$vtime)
+    }
+    #browser()
+    metrics <- cbind(rnott, below.threshold[index, "diverge"], 
+                     below.threshold[index, "diversity"], below.threshold[index, "vtime"])
+    colnames(metrics) <- c("rnott", "diverge", "diversity", "time")
+    return(metrics)
+  })
+  return(metrics.all)
+}
+
 
 # Need to function to combine max divergence/diversity of each and returning 
 get_max_genetic_metrics <- function(time.records, rnott) {
@@ -153,6 +184,22 @@ get_vec_of_files <- function(dir_path, r0_seq, N){
       data_files <- c(data_files, list.files(path=dir_path, pattern=pattern, full.names=T, recursive=FALSE))
   }
   data_files
+}
+
+
+
+## combine all num of circulating strains for time-series 
+combine_mutations <- function(time.records) {
+  # Takes a list of time records
+  # subsets to just time and cum strains
+  # combines into a dataframe 
+  num.mutations.master <- ldply(.data = time.records, function(x) {
+    time.cum.mutations <- data.frame(cbind(x[,"vtime"], x[,"cum.strains"]))
+    return(time.cum.mutations)
+  })
+  #time.records.all  <- do.call("rbind", time.records.all) 
+  colnames(num.mutations.master) <- c("vtime", "cum.strains")
+  return(num.mutations.master)
 }
 
 
