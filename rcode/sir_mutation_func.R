@@ -46,8 +46,7 @@ sir_mutation_agent = function(params) {
     time_record$vI = I
     time_record$cir.strains=1
     time_record$cum.strains=1
-    culprits <- data.frame(matrix(ncol = 4))
-    
+   
     while (t<tend&I>0) { 
       # continue the simulation until we have no more infectious people or t>=tend
     
@@ -80,7 +79,7 @@ sir_mutation_agent = function(params) {
             
             new.strain = mutate.strain(original.strain, alphabet, seq_len)
             new.strain.index <- length(population.strains)+1
-            strain.state[mut.current.index[j]] <- new.strain.index  # update strain index of population
+            strain.state[current.inf.index] <- new.strain.index  # update strain index of population
             
             population.frequency[new.strain.index] <- numeric()  # Add frequency marker to tell if eventually replicates
             population.strains[[new.strain.index]] <- new.strain

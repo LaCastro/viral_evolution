@@ -45,155 +45,225 @@ run_mutate_branches_inc <- function(num_reps, ...) {
 }
 
 ##################################################################################
-# Set up meta-analysis frames to keep track off 
+## Analysis 
 ##################################################################################
-params <- epi_mut_params(N = 1000, I_0 = 10, delta_t = 1, R0 = 4)
+params <- epi_mut_params(N = 100, I_0 = 1, delta_t = 1, R0 = 1.5)
 nrealisations = 100
 
-r0_seq <- seq(1, 4, 0.5)
+N = c(100, 1000, 10000)
+r0_seq = seq(1,4, 0.5)
 
-## Figure out how to write this so you don't have to set it up 
+data_path <- "~/Documents/projects/viral_evolution/data/"
 
-trial_1 <- run_mutate_branches_inc(num_reps = nrealisations, params)
-trail_1.5 <- run_mutate_branches_inc(num_reps = nrealisations, params)
-trial_2 <- run_mutate_branches_inc(num_reps = nrealisations, params)
-trial_2.5 <- run_mutate_branches_inc(num_reps = nrealisations, params)
-trial_3 <- run_mutate_branches_inc(num_reps = nrealisations, params)
-trial_3.5 <- run_mutate_branches_inc(num_reps = nrealisations, params)
-trial_4 <- run_mutate_branches_inc(num_reps = nrealisations, params)
+## multiple parameter combinations, could feed this a_ply 
+
+
+# try calling these a different variable, the j/i might not be a problem 
+for (size in 1:length(N)) {
+  for (r0 in 1:length(r0_seq)) {
+    trial <- run_mutate_branches_inc(num_reps = nrealisations,
+                                     params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = 1))
+     filename <- paste0(data_path,"trial_rnott", r0_seq[r0], "_N", N[size])
+     time.records <- time_records_all(trial)
+     
+     save(time.records, file = paste0(filename, ".RData"))
+  }
+}
 
 
 #Getting Final Sizes (Proportions of each outbreak)
-epi.size.all <- epi_size_all(trial = trial_1) 
+epi.size.all <- epi_size_all(trial = trail_1.5_10e4) 
 
 
-## Creating Max Metric 
-master.data <- data.frame(matrix(ncol = 3))
-colnames(master.data) <- c("rnott", "divergence", "diversity")
-master.data <- master.data[-1,]
+### Reading all desired data and combining for analysis 
+fig_path <- "~/Documents/projects/viral_evolution/figs/"
+data_path <- "~/Documents/projects/viral_evolution/data/"
+file.list <- get_vec_of_files(dir_path = data_path, r0_seq, N)
+combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
+data.files <- data.frame(cbind(combos, file.list))
 
-master.time.data <- data.frame(matrix(ncol = 3))
-colnames(master.time.data) <- c("rnott", "divergence", "diversity")
+###### Code for producing boxplots of max genetic variation metrics 
+## Want to load the data and calculate the max metrics for all 
+max.metrics.master <-  adply(.data = data.files, .margins = 1, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  genetic.metrics <- get_max_genetic_metrics(time.records = time.records, rnott = rnott)
+  genetic.metrics <-  cbind(rep(pop.size, nrow(genetic.metrics)), genetic.metrics)
+  colnames(genetic.metrics)[1] <- "pop.size"
+  return(genetic.metrics)
+})
 
-
-
-time.records <- time_records_all(trial_4)
-divergence.trial <- all_time_max_diverge(time.records)
-diversity.trial <- all_time_max_diversity(time.records)
-data <- cbind(divergence.trial, diversity.trial)
-data <- data.frame(cbind(rep(4, length(diversity.trial)), data))
-colnames(data) <- c("rnott", "divergence", "diversity")
-master.time.data <- rbind(master.time.data, data)
-master.time.data <- master.time.data[-1,]
-
-
-master.data.threshold <- data.frame(matrix(ncol = 4))
-colnames(master.data.threshold) <- c("rnott", "divergence", "diversity", "time")
-
-
-time.records <- time_records_all(trial_4)
-data <- threshold_metrics(threshold = .05, N, records.list = time.records)
-data <- data.frame(cbind(rep(4, nrow(data)), data))
-colnames(data) <- c("rnott", "divergence", "diversity", "time")
-master.data.threshold <-  rbind(master.data.threshold , data)
-master.data.threshold <- master.data.threshold[-1,]
-
-
-
-### boxplots of Max diversity and divergence with R0s
-master.data.threshold.m <- melt(data = master.data.threshold, id.vars = c("rnott"), measure.vars = c("divergence", "diversity", "time"))
-colnames(master.data.threshold.m) <- c("rnott", "type", "value") 
-
-tail(master.data.threshold.m)
-
-threshold.plot <- ggplot(master.data.threshold.m, aes(factor(rnott), value)) + facet_grid(type~., scales = "free") +
-  geom_boxplot()+
-  labs(x = expression("R"[0]))
-
-threshold.plot
-
-save_plot(paste0(fig_path, "threshold.plot.pdf"), threshold.plot, base_height = 8, base_aspect_ratio = 1.2)
-
-
-
-### Get time of max infected, will compare against time of max diversity 
-
-master.max.time <- data.frame(matrix(ncol = 2))
-colnames(master.max.time ) <- c("rnott", "time")
-
-
-time.records <- time_records_all(trial_4)
-data <- all_time_max_infected(x = time.records)
-data <- data.frame(cbind(rep(4,length(data)), data))
-colnames(data) <- c("rnott", "time")
-master.max.time <-  rbind(master.max.time , data)
-
-master.max.time <- master.max.time[-1,]
-# need to get times of max diversity/divergence 
-colnames(master.max.time) <- c("rnott", "infected_time")
-
-head(master.max.time)
-head(master.time.data)
-merged.max.data <- merge(x = master.max.time, y = master.time.data, by = "rnott")
-head(merged.max.data)
-
-
-merged.data.m <- melt(data = merged.max.data, id.vars = c("rnott", "infected_time"), measure.vars = c("divergence", "diversity"))
-
-head(merged.data.m)
-
-max.data.plot <- ggplot(merged.data.m, aes(x = infected_time, y = value)) + geom_point() + facet_grid(variable ~ rnott)
-                
-max.data.plot
-
-
-                            aes(color = factor(rnott))) + facet_wrap(rnott ~ rnott., nrow = 1)
-
-which(is.na(merged.data.m))
-
-factor(merged.data.m$rnott)
-
-
-### boxplots of Max diversity and divergence with R0s
-master.data.m <- melt(data = master.data, id.vars = c("rnott"), measure.vars = c("divergence", "diversity"))
-colnames(master.data.m) <- c("rnott", "type", "value") 
-  
-
-max.metric.plot <- ggplot(master.data.m, aes(factor(rnott), value)) + facet_wrap(~type, nrow = 1) +
+# plotting code 
+max.metrics.m <- melt(data = max.metrics.master, id.vars = c("rnott", "pop.size"),
+                      measure.vars = c("max.divergence", "max.diversity"))
+colnames(max.metrics.m) <- c("rnott", "pop.size", "type", "value") 
+max.metric.plot <- ggplot(max.metrics.m, aes(factor(rnott), value)) + 
+  facet_grid(pop.size~type) +
   geom_boxplot()+
   labs(x = expression("R"[0]), y = "Distance")
+save_plot(paste0(fig_path, "max.metric.plot.pdf"), max.metric.plot, base_height = 8, base_aspect_ratio = 1.2)
 
-save_plot(paste0(fig_path, "max.metric.plot.pdf"), max.metric.plot, base_height = 4, base_aspect_ratio = 2.2)
 
 
+
+######## Code for Combing threshold metrics and plotting 
+threshold.metrics.master <- adply(.data = data.files, .margins = 1, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  threshold.metrics = threshold_metrics(threshold = .1, pop.size, records.list = time.records, rnott = rnott)
+  threshold.metrics = cbind(rep(pop.size, nrow(threshold.metrics)), threshold.metrics)
+  colnames(threshold.metrics)[1] <- "pop.size"
+  return(threshold.metrics)
+})
+
+threshold.metrics.m <- melt(data = threshold.metrics.master, id.vars = c("rnott", "pop.size"), 
+                            measure.vars = c("diverge", "diversity"))
+colnames(threshold.metrics.m) <- c("rnott", "pop.size", "type", "value") 
+threshold.plot <-ggplot(threshold.metrics.m, aes(factor(rnott), value)) + 
+  facet_grid(pop.size~type) +
+  geom_boxplot()+
+  labs(x = expression("R"[0]), y = "Distance")
+save_plot(paste0(fig_path, "threshold.metric.plot.1v2.pdf"), threshold.plot, base_height = 8, base_aspect_ratio = 1.2)
+
+
+
+
+
+
+
+
+
+
+
+######### Code to  Get time of max infected and compare against time  max diversity 
+### Example will be a low R0  (5) and a high R0 (20) for N = 1000
+## Want a two row figure for max diversity and max divergence 
+
+low.r0.path <- file.list[5]
+high.r0.path <- file.list[20]
+
+load(low.r0.path)
+times.low.r0 <- all_time_max_infected(time.records)
+diversity.low.r0 <- all_time_max_diversity(time.records)
+diverge.low.r0 <- all_time_max_diverge(time.records)
+
+low.r0.data <- data.frame(cbind(times.low.r0, diversity.low.r0, diverge.low.r0))
+low.r0.data <- cbind(rep("r0 = 1.5", nrow(low.r0.data)), low.r0.data)
+colnames(low.r0.data) <- c("type", "infected", "diversity", "divergence")
+
+load(high.r0.path)
+times.high.r0 <- all_time_max_infected(time.records)
+diversity.high.r0 <- all_time_max_diversity(time.records)
+diverge.high.r0 <- all_time_max_diverge(time.records)
+high.r0.data <- data.frame(cbind(times.high.r0, diversity.high.r0, diverge.high.r0))
+high.r0.data <- cbind(rep("r0 = 4", nrow(high.r0.data)), high.r0.data)
+colnames(high.r0.data) <- c("type", "infected", "diversity", "divergence")
+
+time.data.master <- rbind(low.r0.data, high.r0.data)
+head(time.data.master)
+time.data.m <- melt(data = time.data.master, id.vars = c("type", "infected"),
+                    measure.vars = c("diversity", "divergence"))
+
+
+combine.low <- combine_time_records(time.records)
+head(combine.low)
+
+stochastic <- ggplot(combined.time.records.m, aes(x = vtime, y = value, color = iter,  group = iter)) +  
+  geom_line() + guides(color = FALSE) +
+  facet_grid(type~variable) + 
+  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
+  labs(x = "Time", y = "Distance")
+
+stochastic <- ggplot(combined.time.records.m, aes(x = vtime, y = value, color = iter,  group = iter)) +  
+  geom_line() + guides(color = FALSE) +
+  facet_grid(type~variable) + 
+  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
+  labs(x = "Time", y = "Distance")
+
+head(combine.low)
+
+cir.strains.plot <- ggplot(combine.low, aes(x = vtime, y = cir.strains, color = iter,  group = iter)) +  
+  geom_point() + guides(color = FALSE) +
+  #facet_grid(type~variable) + 
+  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
+  labs(x = "Time", y = "Number of STrains")
+
+
+time.max.low <- all_time_max_infected(time.records)
+time.max.strains.low <- all_time_max_numstrains(time.records)
+head(strains.time)
+
+strains.time <- data.frame(cbind(time.max.low, time.max.strains.low))
+strains.time  <- cbind(rep("r0 = 1.5", nrow(strains.time)), strains.time)
+colnames(strains.time) <- c("type", "infected", "num.strains")
+
+
+
+load(high.r0.path)
+times.high.r0 <- all_time_max_infected(time.records)
+times.high.strains <- all_time_max_numstrains(time.records)
+
+strains.high <- data.frame(cbind(times.high.r0, times.high.strains))
+strains.high <- cbind(rep("r0 = 4", nrow(strains.high)), strains.high)
+colnames(strains.high) <- c("type", "infected", "num.strains")
+
+strains.data.master <- rbind(strains.time, strains.high)
+head(strains.data.master)
+#time.data.m <- melt(data = time.data.master, id.vars = c("type", "infected"),
+#                    measure.vars = c("diversity", "divergence"))
+
+
+head(strains.time)
+time.scatter.strains <- ggplot(data = strains.data.master, aes(x = infected, y = num.strains)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_wrap(facets = "type", nrow = 1) +
+  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
+  labs(x = "Time of Max Infected", y = "Time of Max Circulating Strains")
+
+
+save_plot(paste0(fig_path, "strains.time.scatter.pdf"), time.scatter.strains, base_height = 4, base_aspect_ratio = 1.8)
+
+
+
+### Scatterplot 
+time.scatter <- ggplot(data = time.data.m, aes(x = infected, y = value)) + 
+  geom_point() +
+  geom_abline(intercept = 0, slope = 1) +
+  facet_grid(type~variable) +
+  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
+  labs(x = "Time of Max Infected", y = "Time of Max Distance")
+
+save_plot(paste0(fig_path, "time.scatter.pdf"), time.scatter, base_height = 8, base_aspect_ratio = 1.2)
 
 
 ## Combining 
-
 strain.records.all <- strain_freq_all(trial)
 
 
-### Plotting 
-
-time.max.diversity <- all_time_max_diversity(time.records.all)
-time.max.infected <- all_time_max_infected(time.records.all)
-
-
-plot_max_times(time.records.all, type = "divergence")
-
-
-
-## Histograms 
-plot_final_sizes(epi.size.all)
-plot_max_divergence(time.records.all)
-plot_max_diversity(time.records.all)
-
-
 ### Line Plots 
-combined.time.records <- combine_time_records(time.records.all)
-stochastic.vI <- ggplot(combined.time.records, aes(x = vtime, y = vI, color = iter,  group = iter)) +  
-  geom_line() + guides(color = FALSE) 
-stochastic.vI
+combined.high <- combine_time_records(time.records) 
+combined.high <- cbind(rep("r0 = 4", nrow(combined.high)), combined.high)
+colnames(combined.high)[1] <- "type"
+
+combined.low <- combine_time_records(time.records)
+combined.low <- cbind(rep("r0 = 1.5", nrow(combined.low)), combined.low)
+colnames(combined.low)[1] <- "type"
+
+combined.time.records <- rbind(combined.low, combined.high)
+combined.time.records.m <- melt(data = combined.time.records, id.vars = c("type", "iter", "vtime"),
+                                measure.vars = c("diverge", "diversity"))
+
+
+stochastic <- ggplot(combined.time.records.m, aes(x = vtime, y = value, color = iter,  group = iter)) +  
+  geom_line() + guides(color = FALSE) +
+  facet_grid(type~variable) + 
+  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
+  labs(x = "Time", y = "Distance")
+
+save_plot(filename = paste0(fig_path, "stochastic.line.pdf"), plot = stochastic, base_height = 4, base_width = 7)
 
 
 stochastic.diverge <- ggplot(runs.master.df, aes(x = vtime, y = diverge, color = trial,  group = trial)) +  
@@ -208,6 +278,13 @@ stochastic.diversity <- ggplot(runs.master.df, aes(x = vtime, y = diversity, col
   geom_line() + guides(color = FALSE)
 stochastic.diversity
 
+
+
+
+## Histograms 
+plot_final_sizes(epi.size.all)
+plot_max_divergence(time.records)
+plot_max_diversity(time.records)
 
 
 

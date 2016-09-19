@@ -111,21 +111,48 @@ all_time_max_diverge <- function(x) {
 # Get Divergence/Diversity Estimates when 
 # 10% of the population is still infected 
 
-threshold_metrics <- function(threshold, N, records.list) {
+threshold_metrics <- function(threshold, N, records.list, rnott) {
   metrics.all <- ldply(records.list, .fun = function(x) {
     number.individuals <- threshold * N
-    rows <- which(x[, "vI"] < number.individuals)
-    diff.rows <- diff(rows)
-    index = which.max(diff.rows)+1 ## Check to see if this is working 
+    # first check to see if it ever reaches that level of individuals 
+    max.infected = max_infected(x = x)
+    if (max.infected > number.individuals) {
+      rows <- which(x[, "vI"] < number.individuals)
+      diff.rows <- diff(rows)
+      index = which.max(diff.rows)+1 ## Check to see if this is working 
+      
+      metrics <- cbind(rnott, x[rows[index], "diverge"], x[rows[index], "diversity"], x[rows[index], "vtime"])
+      colnames(metrics) <- c("rnott", "diverge", "diversity", "time")
+      return(metrics)
+    } else {
+      return()
+    }
     
-    metrics <- cbind(x[rows[index], "diverge"], x[rows[index], "diversity"], x[rows[index], "vtime"])
-    return(metrics)
   })
-  colnames(metrics.all) <- c("diverge", "diversity", "time")
   return(metrics.all)
+}
+ 
+
+# Need to function to combine max divergence/diversity of each and returning 
+get_max_genetic_metrics <- function(time.records, rnott) {
+  max.divergence <- all_max_divergence(time.records)
+  max.diversity <- all_max_diversity(time.records)
+  data <- cbind(max.divergence, max.diversity)
+  data <- data.frame(cbind(rep(rnott, nrow(data)), data))
+  colnames(data)[1] <- "rnott"
+  return(data)
 }
 
 
 
+get_vec_of_files <- function(dir_path, r0_seq, N){
+  data_files <- c()
+  for(r_not in r0_seq){
+        #pattern <- paste0("*_", "t" paste(r_not,  disc_prob, intro_rate, sep="_"), ".Rdata")  
+      pattern  <- paste0("trial_rnott", r_not, "_N")
+      data_files <- c(data_files, list.files(path=dir_path, pattern=pattern, full.names=T, recursive=FALSE))
+  }
+  data_files
+}
 
 
