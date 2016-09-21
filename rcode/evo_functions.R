@@ -1,4 +1,14 @@
 
+
+run_mutate_branches_inc <- function(num_reps, ...) {
+  rlply(.n = num_reps, .expr = sir_mutation_agent(...) ) 
+}
+
+
+### List of Functions That Run the mutation branch
+### Functions are for the evolution of the strains 
+
+
 get_current_old <- function(population,timestep) {
   # Get the Current Strains in the Population 
   # These strains have a frequency greater than 0 
