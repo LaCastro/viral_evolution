@@ -48,13 +48,14 @@ run_mutate_branches_inc <- function(num_reps, ...) {
 ##################################################################################
 ## Analysis 
 ##################################################################################
-params <- epi_mut_params(N = 100, I_0 = 1, delta_t = 1, R0 = 1.5)
+params <- epi_mut_params(N = 1000, I_0 = 1, delta_t = 1, R0 = 1.5)
 nrealisations = 100
 
 N = c(100, 1000, 10000)
 r0_seq = seq(1,4, 0.5)
 
-data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/"
+if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/"
+if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
 
 ## multiple parameter combinations, could feed this a_ply 
 
@@ -65,26 +66,140 @@ for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,
                                      params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = 1))
-     filename <- paste0(data_path,"trial_rnott", r0_seq[r0], "_N", N[size])
-     
-     time.records <- time_records_all(trial)
-     
-     save(time.records, file = paste0(filename, ".RData"))
+     #filename <- paste0(data_path,"trial_rnott", r0_seq[r0], "_N", N[size])
+     #time.records <- time_records_all(trial)
+    
+    filename <- paste0(data_path,"strain_rnott", r0_seq[r0], "_N", N[size])
+    strain.records <- strain_freq_all(trial)
+    
+    save(strain.records, file = paste0(filename, ".RData"))
   }
 }
 
-
-#Getting Final Sizes (Proportions of each outbreak)
-epi.size.all <- epi_size_all(trial = trail_1.5_10e4) 
-
-
 ### Reading all desired data and combining for analysis 
 fig_path <- "~/Documents/projects/viral_evolution/figs/"
-data_path <- "~/Documents/projects/viral_evolution/data/"
 
-file.list <- get_vec_of_files(dir_path = data_path, r0_seq, N)
+
+file.list <- get_vec_of_files_strain(dir_path = paste0(data_path, "strain") , r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
 data.files <- data.frame(cbind(combos, file.list))
+
+
+
+######## Getting Final Times 
+final.time.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  meta.data = data.frame(cbind(rnott, pop.size))
+  
+  final.time.trial <- data.frame(all_epi_time(time.records)); colnames(final.time.trial) = "days"
+  final.time.trial <-  cbind(meta.data, final.size.trial)
+  return(final.time.trial)
+})
+
+epi.time.plot <- ggplot(final.time.master, aes(factor(rnott), days)) + 
+  facet_wrap(facets = ~pop.size, nrow = 1) +
+  geom_boxplot()+
+  labs(x = expression("R"[0]), y = "Time (days)")
+epi.time.plot
+
+save_plot(paste0(fig_path, "epi.time.plot.pdf"), epi.time.plot, base_height = 8, base_aspect_ratio = 1.7)
+
+
+
+### Code for producing boxplots of lifespan of wildtype 
+wildtype.life.master <- adply(.data = data.files, .margins = 1, .id = NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  meta.data = data.frame(cbind(rnott, pop.size))
+  
+  trial.lifespan <- data.frame(all_time_life_wildtype(strain.records)); colnames(trial.lifespan) = "days"
+  trial.lifespan <- cbind(meta.data, trial.lifespan)
+  return(trial.lifespan)
+})
+
+time.wildtype <- ggplot(wildtype.life.master, aes(factor(rnott), days)) + 
+  facet_wrap(~pop.size) +
+  geom_boxplot()+
+  labs(x = expression("R"[0]), y = "Life Span of Wildtype")
+
+time.wildtype
+save_plot(paste0(fig_path, "time.wildtype.pdf"), time.wildtype, base_height = 8, base_aspect_ratio = 1.2)
+
+
+##### Code for plotting lengths of time other mutants are around 
+#This takes awhile 
+mutant.life.master <- adply(.data = data.files, .margins = 1, .id = NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  rnott = as.numeric(sub("_.*", "", x$combos))
+  pop.size = as.numeric(sub(".*_", "", x$combos))
+  meta.data = data.frame(cbind(rnott, pop.size))
+  
+  mutant.lifespan <- data.frame(all_mutant_lifespan(strain.records))
+  colnames(mutant.lifespan) = "lifespan"
+  mutant.lifespan <- cbind(meta.data, mutant.lifespan)
+  return(mutant.lifespan)
+})
+
+## Plotting Code
+mutant.lifespan.plot <- ggplot(mutant.life.master, aes(lifespan)) + 
+  facet_grid(pop.size~rnott, scales = "free_y") +
+  geom_histogram() +
+  theme(panel.margin = unit(1.5, "lines")) +
+  labs(x = "Lifespan (Days)", y = "Count")
+save_plot(paste0(fig_path, "mutant.life.span.pdf"), mutant.lifespan.plot, base_height = 8, base_aspect_ratio = 1.2)
+
+
+## Means and Proportions 
+head(mutant.life.master)
+
+mutant.life.master <- group_by(mutant.life.master, rnott, pop.size)
+mean.mutant.life <- summarise(mutant.life.master, mean(lifespan))
+
+#with the pipe, you can chain!
+mutant.life.master %>%
+  group_by(rnott, pop.size) %>%
+  select(lifespan) %>%
+  summarise(
+    #full = length(lifespan)
+    proportion = count(filter(lifespan == 0)) #/length(lifespan)
+  ) 
+
+mutant.life.master %>%
+  group_by(rnott, pop.size) %>%
+  select(lifespan) %>%
+  filter(lifespan == 0)  %>%
+  summarise(
+    no.replicate = length(lifespan)
+  )
+
+
+
+head(mutant.life.master)
+
+flights %>%
+  group_by(year, month, day) %>%
+  select(arr_delay, dep_delay) %>%
+  summarise(
+    arr = mean(arr_delay, na.rm = TRUE),
+    dep = mean(dep_delay, na.rm = TRUE)
+  ) %>%
+  filter(arr > 30 | dep > 30)
+
+#group_by
+months <- group_by(flights, dest)
+
+#summarise
+summarise(months, avg.distance = mean(distance), sd.distance = sd(distance))
+
+
+
+group_by()
+
+
+
 
 ###### Code for producing boxplots of max genetic variation metrics 
 ## Want to load the data and calculate the max metrics for all 
@@ -183,6 +298,19 @@ increase.mutations <- ggplot(cum.strains.avg, aes(x = vtime, y = avg.strains)) +
   labs(x = "Time", y = "Number of Cumulative Mutations")
   
 save_plot(paste0(fig_path, "increase.mutations.plot.pdf"), increase.mutations, base_height = 8, base_aspect_ratio = 1.75)
+
+
+###### Code to show frequency distributions of how long the wildtype lasts 
+
+strains.trial <- strain_freq_all(trial)
+
+
+
+
+wildtype.life <- all_time_life_wildtype(x = strains.trial)
+
+
+
 
 
 

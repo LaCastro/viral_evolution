@@ -3,6 +3,7 @@
 epi_size_all <- function(trial) {
   ## function for collecting the final sizes of all epidemics
   ## combines in a dataframe
+  ## only works if you have the full trial data 
   
     ldply(.data = trial, .fun = function(x) {
     size <- x$final_size
@@ -45,7 +46,8 @@ combine_time_records <- function(time.records.all) {
 
 strain_freq_all <- function(trial) {
   ## function to combine records 
-  ## can make the second step faster, do this! 
+  ## I can make the second step faster, do this! 
+  ## can't rbind at the end because there are differ columns
   strain.records <-llply(.data = trial, .fun = function(x) {
     s.records  <- x$strain.freq
     return(s.records)
@@ -55,6 +57,8 @@ strain_freq_all <- function(trial) {
   }
   return(strain.records)
 }
+
+
 
 
 ###################  Finding Maximum Functions
@@ -107,6 +111,31 @@ time_max_divergence <- function(x) {
 }
 all_time_max_diverge <- function(x) {
   return(unlist(laply(x, time_max_divergence)))
+}
+
+
+# Get Max Time of Strain 1/wildtype
+time_life_wildtype <- function(x) {
+  dead.end <- which(is.na(x[,"s.1"]))
+  if (length(dead.end) != 0) {
+    life.span = dead.end[1]  
+  } else {
+    life.span  = nrow(x)
+  }
+  return(life.span)
+}
+  
+
+all_time_life_wildtype <- function(x) {
+  return(unlist(laply(x, time_life_wildtype)))
+}  
+
+## Get time of epidemic 
+epi_time <- function(x) {
+  return(x[which.max(x[,"vtime"]), "vtime"])
+}
+all_epi_time <- function(x) {
+  return(unlist(laply(x, epi_time)))
 }
 
 
@@ -176,12 +205,22 @@ get_max_genetic_metrics <- function(time.records, rnott) {
 
 
 
-get_vec_of_files <- function(dir_path, r0_seq, N){
+get_vec_of_files_trial <- function(dir_path, r0_seq, N){
   data_files <- c()
   for(r_not in r0_seq){
         #pattern <- paste0("*_", "t" paste(r_not,  disc_prob, intro_rate, sep="_"), ".Rdata")  
       pattern  <- paste0("trial_rnott", r_not, "_N")
       data_files <- c(data_files, list.files(path=dir_path, pattern=pattern, full.names=T, recursive=FALSE))
+  }
+  data_files
+}
+
+get_vec_of_files_strain <- function(dir_path, r0_seq, N){
+  data_files <- c()
+  for(r_not in r0_seq){
+    #pattern <- paste0("*_", "t" paste(r_not,  disc_prob, intro_rate, sep="_"), ".Rdata")  
+    pattern  <- paste0("strain_rnott", r_not, "_N")
+    data_files <- c(data_files, list.files(path=dir_path, pattern=pattern, full.names=T, recursive=FALSE))
   }
   data_files
 }
@@ -202,4 +241,35 @@ combine_mutations <- function(time.records) {
   return(num.mutations.master)
 }
 
+
+# get life span data of each strain
+mutant_lifespan <- function(s.record) {
+  if (ncol(s.record) == 2) {
+    return() ##The wildtype is th only strain present 
+  }
+  s.record <- data.frame(s.record[,3:ncol(s.record)]) # just getting the mutant 
+  
+  if (ncol(s.record) > 1) {
+    m.life.span <- aaply(.data = s.record, .margins = 2, .expand = F, function(x) {
+      alive = length(which(x > 0)) ## How many days is it alive 
+      return(alive)
+    })
+  } else {
+    m.life.span = length(which(s.record > 0)) 
+  }
+  return(unname(m.life.span))
+}
+
+s.record = strain.records[[3]]
+head(s.record)
+mutant_lifespan(s.record)
+
+
+all_mutant_lifespan <- function(strain.records) {
+  all.life.span <- llply(strain.records, mutant_lifespan)
+  all.life.span = unlist(all.life.span)
+  return(all.life.span)
+}
+
+all_mutant_lifespan(strain.records)
 
