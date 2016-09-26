@@ -31,7 +31,7 @@ epi_mut_params <- function(N = 1000,
                            S_0 = N-I_0,
                            delta_t = 1, 
                            tbeg = 1, 
-                           tend = 121,
+                           tend = 500,
                            gamma = 1/3,
                            R0 = 1.5, 
                            beta = R0*gamma, 
@@ -63,24 +63,15 @@ for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,
                                      params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = 1))
-    filename.time <- paste0(data_path,"trial_rnott", r0_seq[r0], "_N", N[size])
+    filename.time <- paste0(data_path, "/trial/trial_rnott", r0_seq[r0], "_N", N[size])
     time.records <- time_records_all(trial)
     save(time.records, file = paste0(filename.time, ".RData"))
     
-    filename.strain <- paste0(data_path,"strain_rnott", r0_seq[r0], "_N", N[size])
+    filename.strain <- paste0(data_path,"/strain/strain_rnott", r0_seq[r0], "_N", N[size])
     strain.records <- strain_freq_all(trial)
     save(strain.records, file = paste0(filename.strain, ".RData"))
   }
 }
 
-
-
-
-trial.9.time.records <- time_records_all(trial.9)
-trial.9.diversity <- all_max_diversity(trial.9.time.records)
-trial.9.divergence <- all_max_divergence(trial.9.time.records)
-
-hist(trial.9.diversity)
-hist(trial.9.divergence)
-trial.9.final.size <- epi_size_all(trial.9)
-hist(trial.9.final.size$V1)
+trial.1000 <- run_mutate_branches_inc(num_reps = nrealisations,
+                                 params = epi_mut_params(N = 10000))

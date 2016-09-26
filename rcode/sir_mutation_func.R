@@ -39,9 +39,9 @@ sir_mutation_agent = function(params) {
     
     # Time Recrod
     
-    time_record = data.frame(matrix(data=0, ncol = 7))
+    time_record = data.frame(matrix(data=0, ncol = 8))
     colnames(time_record) = c('vS', 'vI', 'cir.strains', 'cum.strains',
-                              'diverge', 'diversity', 'num.mutations')
+                              'diverge', 'diversity', 'entropy', 'num.mutations')
     time_record$vS = S
     time_record$vI = I
     time_record$cir.strains=1
@@ -185,10 +185,12 @@ sir_mutation_agent = function(params) {
       circulating.strains <- length(current.haplotypes$hindex)
       diversity.time  =  get_diversity(current.haplotypes)
       divergence.time  = get_divergence(current.haplotypes, base.haplotype) 
+      entropy.time = get_s.entropy(current.haplotypes)
+      
       cum.strains = length(population.strains)
       
       time_record <- rbind(time_record, c(S,I, circulating.strains, cum.strains,  
-                                          divergence.time, diversity.time, 
+                                          divergence.time, diversity.time, entropy.time,
                                           num.mutations))
       vtime = append(vtime, t)
       t = t + deltat 

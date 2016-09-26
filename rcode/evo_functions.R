@@ -87,6 +87,26 @@ mutate.strain <- function(strain, alphabet, seq_len)  {
   return(strain)
 }
   
+
+
+#### Shannon's entropy
+get_s.entropy <- function(current.haplotypes) {
+  # calculate the entropy present
+  num.of.strains <- length(current.haplotypes$frequencies)
+  entropy = 0
+  if(num.of.strains > 1) {
+    for(i in 1:num.of.strains) {
+      entropy.trial = current.haplotypes$frequencies[[i]]*log(1/current.haplotypes$frequencies[[i]])
+      entropy = entropy + entropy.trial
+    }
+  }
+  else {
+    entropy = 0
+  }
+  return(entropy)
+}
+
+
 get_diversity <- function(current.haplotypes) {
   # calculate the diversity between all strains 
   num.of.strains <- length(current.haplotypes$frequencies)

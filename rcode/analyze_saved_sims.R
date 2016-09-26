@@ -179,7 +179,6 @@ all_epi_time <- function(x) {
 }
 
 
-
 ############################## 
 # Functions Based on a Threshold
 ###############################
@@ -210,6 +209,8 @@ end_threshold_metrics <- function(threshold, N, records.list, rnott) {
  
 # Get Divergence/Diversity Estimates when 
 # 10% of the population is infected 
+
+
 beginning_threshold_metrics <- function(threshold, N, records.list, rnott) {
   # Given a threshold of individuals infected (not cumulative)
   # what are the metrics at this point
