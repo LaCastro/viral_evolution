@@ -107,6 +107,14 @@ all_max_divergence <- function(x) {
   return(unlist(laply(x,max_divergence)))
 }
 
+# Finding Max S.Entropy
+max_sentropy <- function(x) {
+  return(max(x[,"entropy"]))
+}
+all_max_sentropy <- function(x) {
+  return(unlist(laply(x,max_sentropy)))
+}
+
 # Combines max divergence/diversity for a set of 
 # simulations with the same parameters 
 get_max_genetic_metrics <- function(time.records, rnott) {
@@ -114,7 +122,8 @@ get_max_genetic_metrics <- function(time.records, rnott) {
   # Combines into a data-frame
   max.divergence <- all_max_divergence(time.records)
   max.diversity <- all_max_diversity(time.records)
-  data <- cbind(max.divergence, max.diversity)
+  max.entropy <- all_max_sentropy(time.records)
+  data <- cbind(max.divergence, max.diversity, max.entropy)
   data <- data.frame(cbind(rep(rnott, nrow(data)), data))
   colnames(data)[1] <- "rnott"
   return(data)
@@ -153,6 +162,13 @@ all_time_max_diverge <- function(x) {
   return(unlist(laply(x, time_max_divergence)))
 }
 
+#Get Time of Max Entropy
+time_max_entropy <- function(x) {
+  return(x[which.max(x[,"entropy"]), "vtime"])
+}
+all_time_max_entropy <- function(x) {
+  return(unlist(laply(x, time_max_entropy)))
+}
 
 # Get Max Time of Strain 1/wildtype
 time_life_wildtype <- function(x) {
@@ -196,8 +212,8 @@ end_threshold_metrics <- function(threshold, N, records.list, rnott) {
       diff.rows <- diff(rows)
       index = which.max(diff.rows)+1 ## Check to see if this is working 
       
-      metrics <- cbind(rnott, x[rows[index], "diverge"], x[rows[index], "diversity"], x[rows[index], "vtime"])
-      colnames(metrics) <- c("rnott", "diverge", "diversity", "time")
+      metrics <- cbind(rnott, x[rows[index], "diverge"], x[rows[index], "diversity"], x[rows[index], "vtime"], x[rows[index], "entropy"])
+      colnames(metrics) <- c("rnott", "diverge", "diversity", "time", "entropy")
       return(metrics)
     } else {
       return()
@@ -234,8 +250,8 @@ beginning_threshold_metrics <- function(threshold, N, records.list, rnott) {
     }
     #browser()
     metrics <- cbind(rnott, below.threshold[index, "diverge"], 
-                     below.threshold[index, "diversity"], below.threshold[index, "vtime"])
-    colnames(metrics) <- c("rnott", "diverge", "diversity", "time")
+                     below.threshold[index, "diversity"], below.threshold[index, "entropy"], below.threshold[index, "vtime"])
+    colnames(metrics) <- c("rnott", "diverge", "diversity", "entropy", "time")
     return(metrics)
   })
   return(metrics.all)

@@ -49,7 +49,7 @@ params <- epi_mut_params(N = 1000, I_0 = 1, delta_t = 1, R0 = 1.5)
 nrealisations = 100
 
 N = c(100, 1000, 10000)
-r0_seq = seq(.95,1.2, 0.05)
+r0_seq = c(seq(0.9, 2, .1), seq(2.5,5, 0.5))
 
 if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/"
 if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
@@ -75,3 +75,6 @@ for (size in 1:length(N)) {
 
 trial.1000 <- run_mutate_branches_inc(num_reps = nrealisations,
                                  params = epi_mut_params(N = 10000))
+
+trial.records <- time_records_all(trial.1000)
+trial.records[[1]]
