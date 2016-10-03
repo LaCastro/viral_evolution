@@ -258,6 +258,18 @@ beginning_threshold_metrics <- function(threshold, N, records.list, rnott) {
 }
 
 
+## For getting the results at multiple thresholds 
+beg_threshold_metrics <- function(data.files, threshold) { 
+  beg.threshold.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+    load(as.character(x$file.list))
+    trial.params <- get_params(x)
+    threshold.metrics = beginning_threshold_metrics(threshold = threshold,trial.params$pop.size, records.list = time.records, rnott = trial.params$rnott)
+    threshold.metrics = cbind(rep(trial.params$pop.size, nrow(threshold.metrics)), threshold.metrics)
+    colnames(threshold.metrics)[1] <- "pop.size"
+    return(threshold.metrics)
+  })
+  return(beg.threshold.master)
+}
 
 ###################################
 # MISC Functions 
