@@ -62,6 +62,16 @@ combine_mutations <- function(time.records) {
   return(num.mutations.master)
 }
 
+combine_circulating <- function(time.records) {
+  num.circulating <- ldply(.data = time.records, function(x) {
+    time.cum.mutations <- data.frame(cbind(x[,"vtime"], x[,"cir.strains"]))
+    return(time.cum.mutations)
+  })
+  colnames(num.circulating) <- c("vtime", "cir.strains")
+  return(num.circulating)
+}
+
+
 
 
 ################### Functions for getting info from files 
@@ -170,6 +180,14 @@ all_time_max_entropy <- function(x) {
   return(unlist(laply(x, time_max_entropy)))
 }
 
+# Get Time of Max Strains Circulating
+time_max_strains <- function(x) {
+  return(x[which.max(x[,"cir.strains"]), "vtime"])
+}
+all_time_max_strains <- function(x) {
+  return(unlist(laply(x,time_max_strains)))
+}
+
 # Get Max Time of Strain 1/wildtype
 time_life_wildtype <- function(x) {
   # how long is the wildtype strain around
@@ -194,6 +212,18 @@ all_epi_time <- function(x) {
   return(unlist(laply(x, epi_time)))
 }
 
+#Get Metrics When Max is infected
+metrics_at_max_infect <- function(time.records.a) {
+  # Has to be a shifted time series
+  metrics <- ldply(.data = time.records.a, function(x) {
+    index = which(x$shifted.time == 0)
+    diversity = x[index, "diversity"]
+    entropy = x[index, "entropy"]
+    num.cir.strains = x[index, "cir.strains"]
+    prop.strains.est = x[index, "cum.strains"]/max(x$cum.strains)
+    return(cbind(diversity, entropy, num.cir.strains, prop.strains.est))
+  })
+}
 
 ############################## 
 # Functions Based on a Threshold
@@ -319,6 +349,33 @@ epi_size_all <- function(trial) {
   })
 }
 
+
+align_time_series <- function(trial) {
+  # function for assigning peak time as 0
+  # time before becomes negative time,
+  # adds separate column
+  trial$shifted.time <- NA
+  max.time <- time_max_infected(trial)
+  trial.before <- filter(trial, vtime < max.time)
+  if (nrow(trial.before) > 0) {
+    trial.before$shifted.time <- -rev(seq(1:nrow(trial.before)))
+    trial.after <- filter(trial, vtime >= max.time)
+    trial.after$shifted.time <-
+      seq(from = 0, to = (nrow(trial.after) - 1), by = 1)
+    trial.shifted <- rbind(trial.before, trial.after)
+  } else {
+    trial$shifted <- trial$vtime
+  }
+  return(trial.shifted)
+}
+
+align_time_series_all <- function(time.records) {
+  time.records.a <- llply(.data = time.records, function(x) {
+    trial <- align_time_series(x)
+    return(trial)
+  })
+  return(time.records.a)
+}
 
 
 

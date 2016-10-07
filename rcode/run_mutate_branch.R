@@ -57,8 +57,7 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 ## multiple parameter combinations, could feed this a_ply 
 
 
-### need to do this but for the strain frequencies 
- 
+
 for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,

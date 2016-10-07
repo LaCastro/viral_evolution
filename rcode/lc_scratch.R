@@ -5,7 +5,7 @@ rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-sapply(c('sir_agent_func.R','evo_functions.R', 'sir_mutation_func.R', 'analyze_saved_sims.R', 'plotting_functions.R'), source)
+sapply(c('analyze_saved_sims.R', 'run_mutate_branch.R'), source)
 library(deSolve)
 library(ggplot2)
 library(grid)
@@ -15,7 +15,7 @@ library(reshape2)
 library(plyr)
 library(dplyr)
 library(tidyr)
-
+library(data.table)
 
 ## Setting Up Figure and Path directions
 # Figure Path
@@ -27,21 +27,16 @@ if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/v
 if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
 
 
-
 ## Reading in files from saved data runs
 # Whatever R0s and popsizes we are interested in 
 N = c(100, 1000, 10000)
+r0_seq = c(seq(0.9, 2, .1), seq(2.5,5, 0.5))
 
-r0_seq = c(.9, seq(1,4,.5))
-
-r0_seq = seq(.9,1.2, 0.05)
 
 
 file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
 data.files <- data.frame(cbind(combos, file.list))
-
-
 
 ######## Getting Final Times across R0s and popsizes 
 final.time.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
@@ -160,7 +155,6 @@ plot.dead.end.freq <- ggplot(mutant.life.proportion, aes(y = freq.dead, x = fact
 
 
 
-
 ###### Code for producing boxplots of max genetic variation metrics 
 ## Want to load the data and calculate the max metrics for all 
 max.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
@@ -187,6 +181,22 @@ max.metric.plot <- ggplot(max.metrics.short.range, aes(factor(rnott), value)) +
 max.metric.plot
 save_plot(paste0(fig_path, "max.metric.entropy.diversity.short.pdf"), max.metric.plot, base_height = 8, base_aspect_ratio = 1.2)
 
+
+############## Code for getting metrics at infection max 
+max.infect.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  time.records.a <- align_time_series_all(time.records)
+  metrics <- metrics_at_max_infect(time.records = time.records.a)
+  metrics <-  cbind(rep(trial.params, nrow(metrics)), metrics)
+  return(metrics)
+})
+
+
+desired.rnotts.long <- c(.9, seq(1,4,1))
+desired.rnotts.short <- seq(0.9, 1.9, .2)
+
+plot.metric.at.maxinfect(max.infect.metrics.master, desired.rnotts = desired.rnotts.long, desired.metric = "entropy")
 
 
 ######## Code for Combing threshold metrics and plotting 
@@ -228,20 +238,16 @@ colnames(beg.threshold.metrics.m) <- c("rnott", "pop.size", "type", "value")
 beg.threshold.long.range <- filter(beg.threshold.metrics.m, rnott == c(.9, seq(1,5,.5)))
 beg.threshold.short.range <- filter(beg.threshold.metrics.m, rnott == c(.9, seq(1,2,.1)))
 
-
-
 threshold.plot <-ggplot(beg.threshold.short.range, aes(factor(rnott), value)) + 
   facet_grid(type~pop.size, scales = "free_y") +
   geom_boxplot()+
   labs(x = expression("R"[0]), y = "Distance")
 save_plot(paste0(fig_path, "beg.threshold.entropy.short.pdf"), threshold.plot, base_height = 8, base_aspect_ratio = 1.2)
 
-threshold.plot
-
 
 ### beginning threshold metrics for different thresholds
 ### 
-thresholds = seq(0.01, .05, .01)
+thresholds = seq(0.01, .1, .01)
 
 
 multiple.beg.thresholds <- adply(.data = thresholds, .margins = 1, .id = NULL, .expand = F, function(x) {
@@ -251,41 +257,21 @@ multiple.beg.thresholds <- adply(.data = thresholds, .margins = 1, .id = NULL, .
   return(beg.metrics)
 })
 
-head(multiple.beg.thresholds)
 edited.m.beg.thres <- filter(multiple.beg.thresholds, rnott == 0.9 | rnott == 1.1 | rnott == 1.2, pop.size == 10000) %>%
                                   group_by(threshold, pop.size, rnott) %>%
                                   summarise(mean.diversity = mean(diversity), 
                                             mean.entropy = mean(entropy))
                                             #mean.time = mean(time))  
 
-#### 
 m.thresholds.long <- gather(edited.m.beg.thres, "type", "value", 4:5)
 
 beg.range.thresholds.plot <- ggplot(m.thresholds.long, aes(x = threshold, y = value)) + 
   facet_grid(type~rnott, scale = "free_y") +
   geom_line(size = 2) 
-save_plot(paste0(fig_path, "increase.mutations.aroundr01.pdf"), increase.mutations, base_height = 8, base_aspect_ratio = 1.75)
-
-
-
-########## A function but can also stand on its own 
-beg_threshold_metrics <- function(data.files, threshold) { 
-    beg.threshold.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
-      load(as.character(x$file.list))
-      trial.params <- get_params(x)
-      threshold.metrics = beginning_threshold_metrics(threshold = threshold,trial.params$pop.size, records.list = time.records, rnott = trial.params$rnott)
-      threshold.metrics = cbind(rep(trial.params$pop.size, nrow(threshold.metrics)), threshold.metrics)
-      colnames(threshold.metrics)[1] <- "pop.size"
-      return(threshold.metrics)
-    })
-    return(beg.threshold.master)
-}
-  
-
+save_plot(paste0(fig_path, "beg.thresholds.around1.pdf"), beg.range.thresholds.plot, base_height = 8, base_aspect_ratio = 1.75)
 
 
 ###### Code to compare the average rate at which mutations accumulate depending on R0 
-
 cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
@@ -296,8 +282,10 @@ cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand 
 
 ## This works! 
 cum.strains.groups <- group_by(cum.strains.master, rnott, pop.size, vtime)
-#cum.strains.groups <- group_by(cum.strains.master, vtime)
-cum.strains.avg <- summarise(cum.strains.groups, avg.strains = mean(cum.strains), sd.strains = sd(cum.strains)) # standard deviation, not of the mean 
+  summarise(avg.strains = mean(cum.strains), 
+            sd.strains = sd(cum.strains)) %>%
+  filter(rnott %in% desired.rnotts) -> cum.strains.avg
+  
 
 
 time.max.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
@@ -311,30 +299,17 @@ time.max.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F
 })
 
 
+# filter based on desired rnott 
 time.max.groups <- group_by(time.max.master, rnott, pop.size) %>%
                     summarise(infect = mean(max.infect),
                               diversity = mean(max.diversity),
                               entropy = mean(max.entropy)) %>%
                     #gather(type, day, -rnott, -pop.size) %>%
-                    filter(rnott <= 2)
+                    filter(rnott <= 1 | rnott >= 2)
 
-
-#cum.strains.avg$rnott <- factor(cum.strains.avg$rnott)
-cum.strains.avg$pop.size <- factor(cum.strains.avg$pop.size)
-
-#time.max.avg$rnott <- factor(time.max.avg$rnott)
-#time.max.avg$pop.size <- factor(time.max.avg$pop.size)
 
 # plot the average increase for each rnott, pop.size 
-increase.mutations.long.range <- filter(cum.strains.avg, rnott == c(.9, seq(1,5,.5)))
-increase.mutations.short.range <- filter(cum.strains.avg, rnott <= 2)
-
-#time.max.avg$rnott = as.numeric(time.max.avg$rnott)
-#time.max.long.range <- filter(time.max.long, rnott == c(.9, seq(1,5,.5)))
-
-str(time.max.avg)
-
-increase.mutations.plot <- ggplot(increase.mutations.short.range, aes(x = vtime, y = avg.strains)) +
+increase.mutations.plot <- ggplot(cum.strains.avg, aes(x = vtime, y = avg.strains)) +
   geom_ribbon(aes(ymin = (avg.strains -2*sd.strains), ymax = (avg.strains + 2*sd.strains)),
               alpha = .5, fill="steelblue2", color="steelblue2") +
   geom_line(color = "black", lwd = 1) +
@@ -348,80 +323,140 @@ increase.mutations.plot <- ggplot(increase.mutations.short.range, aes(x = vtime,
   geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple")
 
 increase.mutations.plot
-save_plot(paste0(fig_path, "increase.mutations.short.range.pdf"), increase.mutations, base_height = 8, base_aspect_ratio = 1.75)
-
-
-######### Code to  Get time of max infected and compare against time  max diversity 
-### Example will be a low R0  (5) and a high R0 (20) for N = 1000
-## Want a two row figure for max diversity and max divergence 
-
-#low.r0.path <- file.list[5]
-#high.r0.path <- file.list[20]
-
-#load(low.r0.path)
-#times.low.r0 <- all_time_max_infected(time.records)
-#diversity.low.r0 <- all_time_max_diversity(time.records)
-#diverge.low.r0 <- all_time_max_diverge(time.records)
-
-#low.r0.data <- data.frame(cbind(times.low.r0, diversity.low.r0, diverge.low.r0))
-#low.r0.data <- cbind(rep("r0 = 1.5", nrow(low.r0.data)), low.r0.data)
-#colnames(low.r0.data) <- c("type", "infected", "diversity", "divergence")
-
-#load(high.r0.path)
-#times.high.r0 <- all_time_max_infected(time.records)
-#diversity.high.r0 <- all_time_max_diversity(time.records)
-#diverge.high.r0 <- all_time_max_diverge(time.records)
-#high.r0.data <- data.frame(cbind(times.high.r0, diversity.high.r0, diverge.high.r0))
-#high.r0.data <- cbind(rep("r0 = 4", nrow(high.r0.data)), high.r0.data)
-#colnames(high.r0.data) <- c("type", "infected", "diversity", "divergence")
-
-#time.data.master <- rbind(low.r0.data, high.r0.data)
-#time.data.m <- melt(data = time.data.master, id.vars = c("type", "infected"),
-#                    measure.vars = c("diversity", "divergence"))
-
-
-#combine.low <- combine_time_records(time.records)
-
-#stochastic <- ggplot(combined.time.records.m, aes(x = vtime, y = value, color = iter,  group = iter)) +  
-#  geom_line() + guides(color = FALSE) +
-#  facet_grid(type~variable) + 
-#  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
-#  labs(x = "Time", y = "Distance")
-
-#cir.strains.plot <- ggplot(combine.low, aes(x = vtime, y = cir.strains, color = iter,  group = iter)) +  
-#  geom_point() + guides(color = FALSE) +
-#  #facet_grid(type~variable) + 
-#  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
-#  labs(x = "Time", y = "Number of STrains")
-
-
-#time.max.low <- all_time_max_infected(time.records)
-#time.max.strains.low <- all_time_max_numstrains(time.records)
-
-
-#strains.time <- data.frame(cbind(time.max.low, time.max.strains.low))
-#strains.time  <- cbind(rep("r0 = 1.5", nrow(strains.time)), strains.time)
-#colnames(strains.time) <- c("type", "infected", "num.strains")
+save_plot(paste0(fig_path, "increase.mutations.long.range.pdf"), increase.mutations.plot, base_height = 8, base_aspect_ratio = 2)
 
 
 
-#load(high.r0.path)
-#times.high.r0 <- all_time_max_infected(time.records)
-#times.high.strains <- all_time_max_numstrains(time.records)
+# Looking at the derivative of increase mutations
+cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  cum.strains.trial = combine_mutations(time.records = time.records)
+  cum.strains.trial = cbind(trial.params, cum.strains.trial)
+  return(cum.strains.trial)
+})
 
-#strains.high <- data.frame(cbind(times.high.r0, times.high.strains))
-#strains.high <- cbind(rep("r0 = 4", nrow(strains.high)), strains.high)
-#colnames(strains.high) <- c("type", "infected", "num.strains")
 
-#strains.data.master <- rbind(strains.time, strains.high)
+desired.rnotts <- seq(0.9, 1.9, .2)
+desired.rnotts <- c(.9, seq(1,4,1))
 
-#time.scatter.strains <- ggplot(data = strains.data.master, aes(x = infected, y = num.strains)) + 
-#  geom_point() +
-#  geom_abline(intercept = 0, slope = 1) +
-#  facet_wrap(facets = "type", nrow = 1) +
-#  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
-#  labs(x = "Time of Max Infected", y = "Time of Max Circulating Strains")
-#save_plot(paste0(fig_path, "strains.time.scatter.pdf"), time.scatter.strains, base_height = 4, base_aspect_ratio = 1.8)
+head(time.max.master)
+
+time.max.groups <- group_by(time.max.master, rnott, pop.size) %>%
+  summarise(infect = mean(max.infect),
+            diversity = mean(max.diversity),
+            entropy = mean(max.entropy)) %>%
+  filter(rnott %in% desired.rnotts)
+
+
+cum.strains.avg <- group_by(cum.strains.master, rnott, pop.size, vtime) %>%
+  filter(rnott %in% desired.rnotts) %>%
+  summarise(avg.strains = mean(cum.strains),
+            sd.strains = sd(cum.strains)) # standard deviation, not of the mean 
+
+cum.strains.avg %>%
+  group_by(rnott, pop.size) %>%
+  mutate(derivative = avg.strains - lag(avg.strains, default = avg.strains[1])) -> cum.strains.derivative
+
+mutations.derivative <- ggplot(cum.strains.derivative, aes(x = vtime, y = derivative)) +
+  geom_line(color = "black", lwd = 1, size = 1.5) +
+  facet_grid(pop.size~rnott, scales = "free_y") +
+  labs(x = "Time", y = "Number of Mutations, Prime") +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
+  scale_x_continuous(breaks=seq(0, 150, 50)) +
+  theme(strip.background = element_blank()) + 
+  geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red", size = 1) +
+  geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash", size = 1) +
+  geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple", size = 1)
+
+mutations.derivative
+save_plot(filename = paste0(fig_path, "mutations.derivative.long.pdf"), mutations.derivative, base_height = 7, base_aspect_ratio = 1.5)
+
+### Look at Derivative of Diversity and of Entropy with confidence intervals 
+
+desired.rnotts <- seq(0.9, 1.9, .2)
+desired.rnotts <- c(.9, seq(1,4,1))
+
+
+time.max.groups <- group_by(time.max.master, rnott, pop.size) %>%
+  summarise(infect = mean(max.infect),
+            diversity = mean(max.diversity),
+            entropy = mean(max.entropy)) %>%
+  filter(rnott %in% desired.rnotts)
+
+
+
+trajectory.master %>% 
+  group_by(rnott, pop.size, vtime) %>%
+  filter(rnott %in% desired.rnotts) %>%
+  summarise(mean.entropy = mean(entropy),
+            sd.entropy = sd(entropy),
+            mean.diversity = mean(diversity),
+            sd.diversity = sd(diversity)) -> trajectory.metrics
+
+
+trajectory.metrics %>%
+  group_by(rnott, pop.size) %>%
+  mutate(derivative.entropy = mean.entropy - lag(mean.entropy, default = mean.entropy[1]),
+         derivative.diversity = mean.diversity - lag(mean.diversity, default = mean.diversity[1])) %>%
+  gather(Type, Value, derivative.entropy, derivative.diversity)  -> trajectory.derivative
+
+head(trajectory.metrics)
+
+trajectory.metrics <- gather(trajectory.metrics, Type, Value, 4:7) # %>%
+trajectory.metrics  %>%  filter(Type == "mean.diversity" | Type == "sd.diversity") %>%
+                      spread(Type, Value) -> trajectory.metrics
+
+
+timeseries.diveristy <- ggplot(data = trajectory.metrics, aes(x = vtime, y = mean.diversity)) +
+  geom_line() +
+  geom_ribbon(aes(ymin = (mean.diversity -2*sd.diversity), ymax = (mean.diversity + 2*sd.diversity)),
+              alpha = .5, fill="indianred1", color="indianred1") +
+  facet_grid(pop.size~rnott) +
+  labs(x = "Time", y = "Entropy") +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
+  #scale_x_continuous(breaks=seq(0, 150, 50)) +
+  theme(strip.background = element_blank()) +
+  geom_hline(aes(yintercept = 0)) + 
+  geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red", size = 1) +
+  geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash", size = 1) +
+  geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple", size = 1)
+
+
+timeseries.diveristy
+
+save_plot(paste0(fig_path, "timeseries.diversity.long.pdf"), timeseries.diveristy, base_height = 8, base_aspect_ratio = 1.5)
+
+
+
+
+
+                                                                                                                                                                                                                                                                                      trajectory.entropy <- filter(.data = trajectory.derivative, Type == "derivative.entropy")
+trajectory.diversity <- filter(.data = trajectory.derivative, Type == "derivative.diversity")
+
+
+#save(trajectory.metrics, file = paste0(data_path, "trajectory.metrics.RData"))
+#save(trajectory.derivative, file = paste0(data_path, "trajectory.derivative.RData"))
+
+metrics.entropy <- ggplot(data = trajectory.entropy, aes(x = vtime, y = Value))  + 
+  geom_line() +  #, color = Type, group = Type)) +
+  facet_grid(pop.size~rnott) +
+  labs(x = "Time", y = "Metrics") +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
+  #scale_x_continuous(breaks=seq(0, 150, 50)) +
+  theme(strip.background = element_blank()) +
+  geom_hline(aes(yintercept = 0)) + 
+  geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red", size = 1) +
+  geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash", size = 1) +
+  geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple", size = 1)
+
+metrics.entropy
+
+save_plot(filename = paste0(fig_path,"trajectory.entropy.derivative.long.pdf"), metrics.entropy, base_height = 8, base_aspect_ratio = 1.5)
+
+save_plot(filename = paste0(fig_path,"trajectory.diversity.derivative.long.pdf"), metrics.diversity, base_height = 8, base_aspect_ratio = 1.5)
+
+
 
 
 
@@ -440,86 +475,152 @@ max.times.trial.m <- melt(data = time.max.master, id.vars = c("rnott", "pop.size
                           measure.vars = c("max.diversity", "max.entropy"))
 
 max.times.trial.long <- filter(max.times.trial.m, rnott <= 1 | rnott >= 2)
-
+# Having Some Trouble with it getting masked 
 save(max.times.trial.m, file = paste0(data_path, "max.times.trial.long.RData"))
 
 mini.times = sample_n(max.times.trial.long, 5000)
-
 time.scatter <- ggplot(data = max.times.trial.long) + 
   geom_jitter(aes(x = max.infect, y = value, color = variable, shape = variable), alpha = .75 )+
- #geom_jitter() + 
-  #geom_point(aes(x = max.infect, y = max.entropy), color = "orange") + 
   geom_abline(intercept = 0, slope = 1) +
   facet_grid(rnott~pop.size, scales = "free_x") +
   #scale_x_continuous(breaks=seq(0, 150, 50)) +
   scale_y_continuous(breaks=seq(0, 150, 50)) +
   scale_colour_manual(values = c("purple","orange")) +
-#  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
  labs(x = "Time of Max Infected", y = "Time of Max Metric")
 
-time.scatter
-#save_plot(paste0(fig_path, "time.scatter.pdf"), time.scatter, base_height = 8, base_aspect_ratio = 1.2)
+
+save_plot(paste0(fig_path, "time.scatter.pdf"), time.scatter, base_height = 8, base_aspect_ratio = 1.2)
 
 
-## Combining 
-#strain.records.all <- strain_freq_all(trial)
+### Time Plots of Entropy
 
-### Line Plots 
-#combined.high <- combine_time_records(time.records) 
-#combined.high <- cbind(rep("r0 = 4", nrow(combined.high)), combined.high)
-#colnames(combined.high)[1] <- "type"
+trajectory.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  trajectories <- combine_time_records(time.records)
+  trajectories <- cbind(trial.params, trajectories)
+  return(trajectories)
+})
+save(trajectory.master, file = paste0(data_path,"trajectory.master.RData"))
 
-#combined.low <- combine_time_records(time.records)
-#combined.low <- cbind(rep("r0 = 1.5", nrow(combined.low)), combined.low)
-#colnames(combined.low)[1] <- "type"
+#Sampling 20 random iterations from 100 to plot 
+random.iter <- sample(x = seq(0,100), size = 20)
+desired.rnotts <- c(0.9, seq(1, 5, 1))
+head(trajectory.master)
 
-#combined.time.records <- rbind(combined.low, combined.high)
-#combined.time.records.m <- melt(data = combined.time.records, id.vars = c("type", "iter", "vtime"),
-#                                measure.vars = c("diverge", "diversity"))
+trajectory.long <- group_by(trajectory.master, rnott, pop.size, vtime) %>%
+  filter(rnott %in% desired.rnotts) %>%
+  filter(iter %in% random.iter)  %>%
+  summarise(entropy = mean(entropy),
+            entropy.sd = sd(entropy)) 
 
+average.vi <- group_by(trajectory.master, rnott, pop.size, vtime) %>%
+  filter(rnott %in% desired.rnotts) %>%
+  filter(iter %in% random.iter)  %>%
+  summarise(infect = mean(vI),
+            infect.sd = sd(vI)) 
 
-#stochastic <- ggplot(combined.time.records.m, aes(x = vtime, y = value, color = iter,  group = iter)) +  
-#  geom_line() + guides(color = FALSE) +
-#  facet_grid(type~variable) + 
-#  theme_cowplot() %+replace% theme(strip.background=element_rect(fill=NULL,color="black", size=1, linetype=1)) +
-#  labs(x = "Time", y = "Distance")
-
-#save_plot(filename = paste0(fig_path, "stochastic.line.pdf"), plot = stochastic, base_height = 4, base_width = 7)
-
-
-#stochastic.diverge <- ggplot(runs.master.df, aes(x = vtime, y = diverge, color = trial,  group = trial)) +  
-#  geom_line() + guides(color = FALSE) 
-#stochastic.diverge
-
-#number.circulating.strains <- ggplot(runs.master.df, aes(x = vtime, y = cir.strains, color = trial, group = trial)) + 
-#  geom_line() + guides(color = FALSE)
-#number.circulating.strains
-
-#stochastic.diversity <- ggplot(runs.master.df, aes(x = vtime, y = diversity, color = trial, group = trial)) + 
-#  geom_line() + guides(color = FALSE)
-#stochastic.diversity
-
-stochastic.infectives <- ggplot(time.records.combined, aes(x=vtime, y = vI, color = iter, group = iter)) +
-  geom_line() + guides(color = FALSE)
-stochastic.infectives
+stochastic.entropy <- ggplot(trajectory.long, aes(x=vtime, y = entropy)) +
+  geom_line(size = 1.25) + 
+  geom_ribbon(aes(ymin = (entropy -2*entropy.sd), ymax = (entropy + 2*entropy.sd)),
+              alpha = .5, fill="indianred1", color="indianred1") +
+  facet_grid(pop.size~rnott) + 
+  labs(x = "Time", y = "Entropy") +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5)) +
+  theme(strip.background = element_blank()) + 
+  theme(panel.margin = unit(1.5, "lines")) 
 
 
-stochastic.diverge <- ggplot(time.records.combined, aes(x=vtime, y = diverge, color = iter, group = iter)) +
-  geom_line() + guides(color = FALSE)
+average.vi.plot <- ggplot(average.vi, aes(x = vtime, y = infect)) + geom_line(color = "red", linetype  = 1, size = 1.5)+
+  facet_grid(pop.size~rnott, scales = "free_y") + 
+  geom_ribbon(aes(ymin = (infect -2*infect.sd), ymax = (infect + 2*infect.sd)),
+              alpha = .5, fill="indianred1", color="indianred1") +
+  theme(strip.background = element_blank()) +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5)) +
+  labs(x = "Time", y = "Infected Individuals")  + 
+  theme(panel.margin = unit(1.5, "lines")) 
 
 
-stochastic.entropy <- ggplot(time.records.combined, aes(x=vtime, y = entropy, color = iter, group = iter)) +
-  geom_line() + guides(color = FALSE)
+combined.short.trajectories <- plot_grid(stochastic.entropy, average.vi.plot, labels = c("A", "B"))
+save_plot(filename = paste0(fig_path, "combined.short.traj.pdf"), plot = combined.short.trajectories, base_height = 8, base_aspect_ratio = 2)
 
 
-time.records <- time_records_all(trial.1000)
-time.records.combined <- combine_time_records(time.records)
 
-time.records.combined %>%
-  filter(iter == 3) %>%
-  ggplot(aes(x=vtime, y = vI)) + geom_line() 
+###### 
 
-time.records.combined %>%
-  filter(iter == 3) %>%
-  ggplot(aes(x=vtime, y = entropy)) + geom_line() 
 
+## Sampling 20/100 strain. records. 
+sample <- sample(x = seq(1:100), size = 20)
+
+# function to go into strain.records and put frequency into long form
+long.strains <- function(index, strain.records) {
+  trial.strain.record <- strain.records[[index]]
+  trial.strain.record$time <- seq(1:nrow(trial.strain.record))
+  strain.record.long <- gather(trial.strain.record, strain.name, frequency, -iter, -time)
+  strain.record.long[is.na(strain.record.long)] <- 0
+  return(strain.record.long)
+}
+
+
+long.strains.master <- adply(.data = sample, .margins = 1, function(x) {
+  long.strains.m <- long.strains(x, strain.records)
+  return(long.strains.m)
+})
+
+
+#### Getting Sample Time for Samples
+
+time.max.samples <- adply(.data = sample, .margins = 1, function(x) {
+  time.record <- time.records[[x]]
+  max.infect <- time_max_infected(time.record)
+  max.diversity < time_max_diversity(time.record)
+  max.entropy <- time_max_entropy(time.record)
+  max.strains <- time_max_strains(time.record)
+  max.times.trial <- cbind(max.infect, max.diversity, max.entropy, max.strains)
+  return(max.times.trial)
+})
+
+time.max.samples.long <- gather(time.max.samples, type, value, -X1)
+
+
+rnott.1.5.pop.1000 <- ggplot(data = long.strains.master, aes(x = time, y = frequency, fill = strain.name)) +
+  facet_wrap(~ X1, scales = "free") +
+  geom_area(color = 'black', size = .2, alpha = .4) + guides(fill = FALSE) +
+  geom_vline(data = time.max.samples.long, aes(xintercept = jitter(value, .15), color = type), size = 1.25, alpha = .85) +
+  scale_color_manual(values = c("darkorange1", "mediumblue", "purple", "black")) +
+  theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
+  labs(x = "Time", y = "Frequency")
+rnott.1.5.pop.1000
+
+  
+
+time.metrics <- data.frame(rbind(max.entropy, max.diversity, max.infect)); colnames(time.metrics)[1] <- "value"
+time.metrics$type <- NA
+time.metrics$type <- c("max.entropy", "max.diversity", "max.infect")
+
+max.entropy <- time_max_entropy(x = time.record.1)
+max.diversity <- time_max_diversity(x=time.record.1)
+max.infect <- time_max_infected(x = time.record.1)
+
+
+aligned.time.series <- combine_time_records(time.records.a)
+aligned.time.series %>% group_by(shifted.time) %>%
+  summarise(mean.diversity = mean(diversity),
+            sd.diversity = sd(diversity),
+            mean.entropy = mean(entropy),
+            sd.entropy = sd(entropy),
+            mean.cir.strains = mean(cir.strains),
+            sd.cir.strains = sd(cir.strains),
+            mean.cum.strains = mean(cum.strains),
+            sd.cum.strains = sd(cum.strains)) -> aligned.time.series.average
+
+
+head(aligned.time.series.average)
+align.ts.long <- gather(aligned.time.series, metric, value, -iter, -vtime, -shifted.time) %>%
+  group_by(vtime) %>%
+  
+
+
+
+ggplot(align.ts.long, aes(x = shifted.time, y = value, group = iter, color = iter))+guides(color = FALSE)+
+  facet_wrap(~metric, scales = "free") + geom_line()
