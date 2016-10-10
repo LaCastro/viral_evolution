@@ -38,15 +38,14 @@ epi_mut_params <- function(N = 1000,
                            seq_len = 100,
                            alphabet = c(1, 2, 3, 4),
                            year_mut_rate = 1.8*10^-2, #1.8*10^-3
-                           mut_rate = year_mut_rate / 365 / delta_t) #per site per day per delta t)
+                           mut_rate = year_mut_rate / (365 / delta_t)) #per site per day per delta t)
 return(as.list(environment()))
 
 
 ##################################################################################
 ## Analysis 
 ##################################################################################
-params <- epi_mut_params(N = 1000, I_0 = 1, delta_t = 1, R0 = 1.5)
-nrealisations = 100
+nrealisations = 1000
 
 N = c(100, 1000, 10000)
 r0_seq = c(seq(0.9, 2, .1), seq(2.5,5, 0.5))
@@ -55,9 +54,6 @@ if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/v
 if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
 
 ## multiple parameter combinations, could feed this a_ply 
-
-
-
 for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,
@@ -72,8 +68,3 @@ for (size in 1:length(N)) {
   }
 }
 
-trial.1000 <- run_mutate_branches_inc(num_reps = nrealisations,
-                                 params = epi_mut_params(N = 10000))
-
-trial.records <- time_records_all(trial.1000)
-trial.records[[1]]

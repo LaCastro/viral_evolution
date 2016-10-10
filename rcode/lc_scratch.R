@@ -31,6 +31,8 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 # Whatever R0s and popsizes we are interested in 
 N = c(100, 1000, 10000)
 r0_seq = c(seq(0.9, 2, .1), seq(2.5,5, 0.5))
+r0_seq = c(seq(0.9, 2, .1))
+r0_seq = c(.9, 1)
 
 
 
@@ -39,6 +41,24 @@ combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")
 data.files <- data.frame(cbind(combos, file.list))
 
 ######## Getting Final Times across R0s and popsizes 
+
+
+# Get trajectories of infected to see what is occuring when R0 ~ 1
+
+trajectories <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  vI.trajectory <- combine_time_records(time.records)
+  vI.trajectory <- cbind(trial.params, vI.trajectory$iter, vI.trajectory$vtime, vI.trajectory$vI)
+  return(vI.trajectory)
+})
+colnames(trajectories) <- c("rnott", "pop.size", "iter", "vtime", "vI")
+
+ggplot(data = trajectories, aes(x = vtime, y = vI, group = iter, color = iter))+geom_smooth()+guides(color = FALSE) +
+  facet_grid(rnott~pop.size, scales = "free")
+##############################
+
+# Get the length of time each simulation takes
 final.time.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
@@ -47,12 +67,89 @@ final.time.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand =
   return(final.time.trial)
 })
 
+
+# Scatter Plot 
 epi.time.plot <- ggplot(final.time.master, aes(factor(rnott), days)) + 
   facet_wrap(facets = ~pop.size, nrow = 1) +
-  geom_boxplot()+
+  geom_jitter(alpha = .5) +
   labs(x = expression("R"[0]), y = "Time (days)")
+
+#Histogram 
+epi.time.plot.hist <- ggplot(final.time.master, aes(days)) + 
+  facet_grid(rnott~pop.size) +
+  geom_histogram() +
+  labs(x = "Time (days)", y = "Count")
 save_plot(paste0(fig_path, "epi.time.r0around1.pdf"), epi.time.plot, base_height = 8, base_aspect_ratio = 1.7)
 
+
+# Look at the proportion of the population that was infected 
+final.infected.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+ # browser()
+  final.infected.trial <- data.frame(all_total_infected(time.records = time.records, trial.N = trial.params$pop.size))
+  final.infected.trial <- cbind(trial.params, final.infected.trial)
+  return(final.infected.trial)
+})
+colnames(final.infected.master)[3] <- "prop.infected"
+
+final.infected.master %>% filter(pop.size == 1000) -> final.infected.1000
+final.infected.1000 %>% filter(rnott == 0.9) %>%
+  summarise(max.infect = max(prop.infected))
+
+
+# Look at the distribution of maxinum number of people infected in a time
+histogram.prevalance <- adply(.data = data.files, .margins = 1, .id= NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  max.prev <- data.frame(all_max_infected(x = time.records))
+  histogram.data <- cbind(trial.params,max.prev)
+  return(histogram.data)
+})
+colnames(histogram.prevalance)[3] <- "max.prev"
+
+# Filter to look at area right around 1 
+# Testing Thresholds 
+deterministic.prop %>% filter(pop.size == 10000) -> deterministic.prop.10000
+
+time.thresholds <- data.frame(small = .025*100, medium = .03*1000, large = .03*10000)
+
+histogram.prevalance %>% filter(rnott < 1.3) -> max.prev.around.1
+ggplot(data = max.prev.around.1, aes(max.prev))+geom_histogram(bins = 50) +facet_grid(rnott~pop.size, scales = "free_x")+
+  geom_vline(xintercept = 2.5)+geom_vline(xintercept = 25, color = "blue")+geom_vline(xintercept = 250, color = "green")
+
+total.infected.10000 <- ggplot(final.infected.10000, aes(x = factor(rnott), prop.infected)) +
+  geom_violin()+
+  geom_jitter(alpha = .5) +
+  geom_hline(yintercept = .2,  color = "purple", size = 2)+
+  geom_hline(yintercept = .36, color = "blue", size = 2) + 
+  labs(x =  expression("R"[0]), y = "Proportion of Population Infected-10000")
+
+total.infected.10000.density <- ggplot(final.infected.10000, aes(prop.infected)) +
+  geom_density(adjust = 3) +
+  facet_wrap(~rnott) +
+  geom_vline(xintercept = .2, color = "purple", size = 1.5) +
+  geom_vline(xintercept = .36, color = "blue", size = 1.5) + 
+  geom_vline(data = deterministic.prop.10000, aes(xintercept = prop), color = "orange", size = 1.5, linetype = "longdash") + 
+  labs(y = "Density", x = "Proportion of Population Infected-10000")
+
+total.infected.10000.density  
+
+total.infected.plot <- ggplot(final.infected.master, aes(prop.infected)) + 
+  facet_grid(rnott~pop.size) +
+  geom_histogram() +
+  labs(x = expression("R"[0]), y = "Proportion of Population Infected")
+
+
+
+meta.data.master <- cbind(final.infected.master, final.time.master[,3]); colnames(meta.data.master)[4] <- "days"
+meta.data.master <- cbind(meta.data.master, histogram.prevalance$max.prev)
+ggplot(data = meta.data.master, aes(x = max.prev, y = prop.infected)) + geom_point()+facet_grid(pop.size~rnott)
+colnames(meta.data.master) <- c("rnott", "pop.size", "prop.infected", "days", "max.prev")
+meta.data.master %>% filter(rnott < 1.3) -> meta.data.around1
+
+# Trying Different Relationships 
+ggplot(meta.data.around1, aes(x = max.prev, y =prop.infected)) + geom_jitter(alpha = .5) + facet_grid(rnott~pop.size, scales = "free_x")
 
 
 ####### Boxplots of lifespan of wildtype strains across R0s and popsizes 
@@ -183,6 +280,8 @@ save_plot(paste0(fig_path, "max.metric.entropy.diversity.short.pdf"), max.metric
 
 
 ############## Code for getting metrics at infection max 
+
+
 max.infect.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
@@ -196,7 +295,7 @@ max.infect.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, 
 desired.rnotts.long <- c(.9, seq(1,4,1))
 desired.rnotts.short <- seq(0.9, 1.9, .2)
 
-plot.metric.at.maxinfect(max.infect.metrics.master, desired.rnotts = desired.rnotts.long, desired.metric = "entropy")
+plot.metric.at.maxinfect(max.infect.metrics.master, desired.rnotts = desired.rnotts.short, desired.metric = "entropy")
 
 
 ######## Code for Combing threshold metrics and plotting 
@@ -617,9 +716,8 @@ aligned.time.series %>% group_by(shifted.time) %>%
 
 head(aligned.time.series.average)
 align.ts.long <- gather(aligned.time.series, metric, value, -iter, -vtime, -shifted.time) %>%
-  group_by(vtime) %>%
+  group_by(vtime) 
   
-
 
 
 ggplot(align.ts.long, aes(x = shifted.time, y = value, group = iter, color = iter))+guides(color = FALSE)+

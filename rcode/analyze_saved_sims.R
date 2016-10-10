@@ -212,6 +212,25 @@ all_epi_time <- function(x) {
   return(unlist(laply(x, epi_time)))
 }
 
+
+
+## Get Total Size of Infected 
+infected_trial <- function(time.record, trial.N) {
+  remaining.susceptible <- min(time.record$vS)
+  total.infected <- trial.N - remaining.susceptible
+  total.infected.prop <- total.infected/trial.N
+  return(total.infected.prop)
+}
+
+all_total_infected <- function(time.records, trial.N) {
+  #browser()
+  all.infected <- laply(.data = time.records, .fun = function(x) {
+    #browser()
+    final.infected = infected_trial(x, trial.N)
+  })
+ return(unlist(all.infected))
+}
+
 #Get Metrics When Max is infected
 metrics_at_max_infect <- function(time.records.a) {
   # Has to be a shifted time series
