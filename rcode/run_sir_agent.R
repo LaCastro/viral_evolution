@@ -49,13 +49,14 @@ SIRfunc=function(t, x, vparameters){
 # Simulate the model with deterministic ODE's, so that we have something
 # to compare our stochastic simulation to--this will underestimate because of the time difference 
 ##################################################################################
-N = 1000 # population size 
-I_0 = 10     # number intially infected people in the population
+N = 10000# population size 
+I_0 = 100     # number intially infected people in the population
 R_0 = 0      # assume no one has recovered at first
-delta_t = .1      # nominal time step
+delta_t = 1      # nominal time step
 tbeg  = 1           # begin day
 tend  = 200 # end day
 gamma = 1/3  
+R0 = 1.01
 beta = R0*gamma
 
 #N = 1000
@@ -77,7 +78,7 @@ deterministic.prop <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand 
   vt = seq(tbeg,tend,delta_t)
   vparameters = c(gamma=gamma,beta=beta)
   
-  inits = c(S=N-10,I=10,R=R_0)
+  inits = c(S=N-I_0,I=I_0,R=R_0)
   
   sirmodel = as.data.frame(lsoda(y = inits, times = vt, func = SIRfunc, parms = vparameters))
   prop = (N-min(sirmodel$S))/N

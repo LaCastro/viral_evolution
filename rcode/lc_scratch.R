@@ -30,39 +30,74 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 ## Reading in files from saved data runs
 # Whatever R0s and popsizes we are interested in 
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 2, .1), seq(2.5,5, 0.5))
-r0_seq = c(seq(0.9, 2, .1))
-r0_seq = c(.9, 1)
+r0_seq = c(seq(0.9, 2, .2), seq(2,5, 0.5))
 
-
+#r0_seq = c(seq(0.9, 2, .1))
+#r0_seq = c(.9, 1, 1.1)
 
 file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
 data.files <- data.frame(cbind(combos, file.list))
 
 ######## Getting Final Times across R0s and popsizes 
-
-
 # Get trajectories of infected to see what is occuring when R0 ~ 1
+epidemic.trials <- alply(.data = data.files, .margins = 1, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  epidemic.trials <- get_epidemic_index(time.records, trial.N = trial.params$pop.size, threshold.prev = .025,
+                                        threshold.prop = .25)
+  if (length(epidemic.trials) == 0) epidemic.trials <- 0
+  epidemic.trials <- cbind(trial.params, epidemic.trials)
+  return(epidemic.trials)
+})
+
+data.files$epidemic.trials <- epidemic.trials
+
 
 trajectories <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  vI.trajectory <- combine_time_records(time.records)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  vI.trajectory <- combine_time_records(time.records[epidemic.index])
   vI.trajectory <- cbind(trial.params, vI.trajectory$iter, vI.trajectory$vtime, vI.trajectory$vI)
   return(vI.trajectory)
 })
 colnames(trajectories) <- c("rnott", "pop.size", "iter", "vtime", "vI")
 
-ggplot(data = trajectories, aes(x = vtime, y = vI, group = iter, color = iter))+geom_smooth()+guides(color = FALSE) +
-  facet_grid(rnott~pop.size, scales = "free")
-##############################
+random.iter <- sample(x = seq(1:1000), size = 50)
+trajectories %>% filter(iter %in% random.iter) -> trajectories.sample
 
+ggplot(data = trajectories.sample, aes(x = vtime, y = vI, group = iter, color = iter))+geom_smooth()+guides(color = FALSE) +
+  facet_grid(rnott~pop.size, scales = "free")
+
+###### Get trajectories of outbreaks that will be considered epidemcis 
+epidemic.trajectories <- adply(.data = data.files, .margins = 1, .id = NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  vI.trajectory <- combine_time_records(time.records[epidemic.index])
+  vI.trajectory <- cbind(trial.params, vI.trajectory$iter, vI.trajectory$vtime, vI.trajectory$vI)
+  return(vI.trajectory)
+})
+
+
+
+
+colnames(epidemic.trajectories) <- c("rnott", "pop.size", "iter", "vtime", "vI")
+random.iter <- sample(x = seq(1:800), size = 200)
+epidemic.trajectories %>% filter(iter %in% random.iter) -> epidemic.trajectories.sample
+
+ggplot(data = epidemic.trajectories.sample, aes(x = vtime, y = vI, group = iter, color = iter))+geom_smooth()+guides(color = FALSE) +
+  facet_grid(pop.size~rnott, scales = "free")
+
+
+##############################
 # Get the length of time each simulation takes
 final.time.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  final.time.trial <- data.frame(all_epi_time(time.records)); colnames(final.time.trial) = "days"
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  final.time.trial <- data.frame(all_epi_time(time.records[epidemic.index])); colnames(final.time.trial) = "days"
   final.time.trial <-  cbind(trial.params, final.time.trial)
   return(final.time.trial)
 })
@@ -97,6 +132,22 @@ final.infected.master %>% filter(pop.size == 1000) -> final.infected.1000
 final.infected.1000 %>% filter(rnott == 0.9) %>%
   summarise(max.infect = max(prop.infected))
 
+ggplot(final.infected.master, aes(factor(rnott), prop.infected)) + geom_jitter(alpha = .5) + 
+  geom_violin(alpha = .5) + facet_wrap(~pop.size, nrow =1 ) + geom_hline(yintercept = .13, color = "purple") +
+  geom_hline(yintercept = .25, color = "orange")
+
+final.infected.master %>% filter(prop.infected > 0.25) -> epidemics
+
+final.infected.master %>% group_by(rnott, pop.size) %>%
+                                 filter(prop.infected < 0.35) %>%
+                                 tally() %>% 
+                                 mutate(prop.excluded = n/9000) -> prop.excluded
+
+final.infected.master %>% filter(prop.infected >= 0.35) -> final.infected.35
+
+ggplot(final.infected.35, aes(factor(rnott), prop.infected)) + geom_jitter(alpha = .5) + 
+  geom_violin(alpha = .5) + facet_wrap(~pop.size, nrow =1 )
+
 
 # Look at the distribution of maxinum number of people infected in a time
 histogram.prevalance <- adply(.data = data.files, .margins = 1, .id= NULL, .expand = F, function(x) {
@@ -107,6 +158,8 @@ histogram.prevalance <- adply(.data = data.files, .margins = 1, .id= NULL, .expa
   return(histogram.data)
 })
 colnames(histogram.prevalance)[3] <- "max.prev"
+head(histogram.prevalance)
+histogram.prevalance <- mutate(histogram.prevalance, ratio = max.prev/(.01*pop.size))
 
 # Filter to look at area right around 1 
 # Testing Thresholds 
@@ -115,7 +168,8 @@ deterministic.prop %>% filter(pop.size == 10000) -> deterministic.prop.10000
 time.thresholds <- data.frame(small = .025*100, medium = .03*1000, large = .03*10000)
 
 histogram.prevalance %>% filter(rnott < 1.3) -> max.prev.around.1
-ggplot(data = max.prev.around.1, aes(max.prev))+geom_histogram(bins = 50) +facet_grid(rnott~pop.size, scales = "free_x")+
+
+ggplot(data = histogram.prevalance, aes(max.prev))+geom_histogram(bins = 20) +facet_grid(rnott~pop.size, scales = "free_x") #+
   geom_vline(xintercept = 2.5)+geom_vline(xintercept = 25, color = "blue")+geom_vline(xintercept = 250, color = "green")
 
 total.infected.10000 <- ggplot(final.infected.10000, aes(x = factor(rnott), prop.infected)) +
@@ -143,13 +197,24 @@ total.infected.plot <- ggplot(final.infected.master, aes(prop.infected)) +
 
 
 meta.data.master <- cbind(final.infected.master, final.time.master[,3]); colnames(meta.data.master)[4] <- "days"
-meta.data.master <- cbind(meta.data.master, histogram.prevalance$max.prev)
-ggplot(data = meta.data.master, aes(x = max.prev, y = prop.infected)) + geom_point()+facet_grid(pop.size~rnott)
-colnames(meta.data.master) <- c("rnott", "pop.size", "prop.infected", "days", "max.prev")
-meta.data.master %>% filter(rnott < 1.3) -> meta.data.around1
+meta.data.master <- cbind(meta.data.master, histogram.prevalance$max.prev, histogram.prevalance$ratio)
+colnames(meta.data.master) <- c("rnott", "pop.size", "prop.infected", "days", "max.prev", "ratio")
+head(meta.data.master)
+meta.data.master %>% filter(prop.infected >=  .25) -> meta.data.prop25
+meta.data.prop35 %>% filter(max.prev >= .02*pop.size) -> meta.data.two.critera 
+
+
 
 # Trying Different Relationships 
-ggplot(meta.data.around1, aes(x = max.prev, y =prop.infected)) + geom_jitter(alpha = .5) + facet_grid(rnott~pop.size, scales = "free_x")
+ggplot(data = meta.data.master, aes(x = ratio, y = prop.infected)) + geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x")
+
+ggplot(data = meta.data.prop25, aes(x = days, y = prop.infected)) + geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x")
+
+ggplot(meta.data.two.critera, aes(x = max.prev, y = prop.infected)) + geom_jitter(alpha = .5) + facet_grid(rnott~pop.size, scales = "free_x")
+
+
+
+
 
 
 ####### Boxplots of lifespan of wildtype strains across R0s and popsizes 
@@ -254,6 +319,9 @@ plot.dead.end.freq <- ggplot(mutant.life.proportion, aes(y = freq.dead, x = fact
 
 ###### Code for producing boxplots of max genetic variation metrics 
 ## Want to load the data and calculate the max metrics for all 
+
+data.files$epidemic.indicies <- epidemic.indices
+
 max.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
@@ -263,20 +331,33 @@ max.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand
   return(genetic.metrics)
 })
 
+data.files
+
+max.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  genetic.metrics <- get_max_genetic_metrics(time.records = time.records[epidemic.index], rnott = trial.params$rnott)
+  genetic.metrics <-  cbind(rep(trial.params$pop.size, nrow(genetic.metrics)), genetic.metrics)
+  colnames(genetic.metrics)[1] <- "pop.size"
+  return(genetic.metrics)
+})
+
+head(max.metrics.master)
 # plotting code 
 max.metrics.m <- melt(data = max.metrics.master, id.vars = c("rnott", "pop.size"),
                       measure.vars = c("max.entropy", "max.diversity"))
 colnames(max.metrics.m) <- c("rnott", "pop.size", "type", "value") 
-
+#head()
 max.metrics.long.range <- filter(max.metrics.m, rnott == c(.9, seq(1,5,.5)))
 max.metrics.short.range <- filter(max.metrics.m, rnott == c(.9, seq(1,2,.1)))
 
-max.metric.plot <- ggplot(max.metrics.short.range, aes(factor(rnott), value)) + 
+max.metric.plot <- ggplot(max.metrics.m, aes(factor(rnott), value)) + 
   facet_grid(type~pop.size, scales = "free_y") +
   geom_boxplot()+
   labs(x = expression("R"[0]), y = "Distance")
 max.metric.plot
-save_plot(paste0(fig_path, "max.metric.entropy.diversity.short.pdf"), max.metric.plot, base_height = 8, base_aspect_ratio = 1.2)
+save_plot(paste0(fig_path, "max.metric.entropy.diversity.epidemics.pdf"), max.metric.plot, base_height = 8, base_aspect_ratio = 1.2)
 
 
 ############## Code for getting metrics at infection max 
@@ -285,17 +366,18 @@ save_plot(paste0(fig_path, "max.metric.entropy.diversity.short.pdf"), max.metric
 max.infect.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  time.records.a <- align_time_series_all(time.records)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  time.records.a <- align_time_series_all(time.records[epidemic.index])
   metrics <- metrics_at_max_infect(time.records = time.records.a)
   metrics <-  cbind(rep(trial.params, nrow(metrics)), metrics)
   return(metrics)
 })
 
-
+desired.rnotts <- r0_seq
 desired.rnotts.long <- c(.9, seq(1,4,1))
 desired.rnotts.short <- seq(0.9, 1.9, .2)
 
-plot.metric.at.maxinfect(max.infect.metrics.master, desired.rnotts = desired.rnotts.short, desired.metric = "entropy")
+plot.metric.at.maxinfect(max.infect.metrics.master, desired.rnotts = desired.rnotts, desired.metric = "diversity")
 
 
 ######## Code for Combing threshold metrics and plotting 
@@ -371,18 +453,25 @@ save_plot(paste0(fig_path, "beg.thresholds.around1.pdf"), beg.range.thresholds.p
 
 
 ###### Code to compare the average rate at which mutations accumulate depending on R0 
+
 cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  cum.strains.trial = combine_mutations(time.records = time.records)
-  cum.strains.trial = cbind(trial.params, cum.strains.trial)
-  return(cum.strains.trial)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  if (epidemic.index[1] > 0) {
+    time.records.a <- align_time_series_all(time.records[epidemic.index])
+    cum.strains.trial = combine_mutations(time.records = time.records.a)
+    cum.strains.trial = cbind(trial.params, cum.strains.trial)
+    return(cum.strains.trial)
+  }
 })
 
 ## This works! 
-cum.strains.groups <- group_by(cum.strains.master, rnott, pop.size, vtime)
+head(cum.strains.master)
+
+cum.strains.master %>% group_by(rnott, pop.size, shifted.time) %>%
   summarise(avg.strains = mean(cum.strains), 
-            sd.strains = sd(cum.strains)) %>%
+            sd.strains = sd(cum.strains))  %>%
   filter(rnott %in% desired.rnotts) -> cum.strains.avg
   
 
@@ -408,7 +497,7 @@ time.max.groups <- group_by(time.max.master, rnott, pop.size) %>%
 
 
 # plot the average increase for each rnott, pop.size 
-increase.mutations.plot <- ggplot(cum.strains.avg, aes(x = vtime, y = avg.strains)) +
+increase.mutations.plot <- ggplot(cum.strains.avg, aes(x = shifted.time, y = avg.strains)) +
   geom_ribbon(aes(ymin = (avg.strains -2*sd.strains), ymax = (avg.strains + 2*sd.strains)),
               alpha = .5, fill="steelblue2", color="steelblue2") +
   geom_line(color = "black", lwd = 1) +
@@ -416,9 +505,11 @@ increase.mutations.plot <- ggplot(cum.strains.avg, aes(x = vtime, y = avg.strain
   #theme(panel.margin = unit(1.5, "lines")) + 
   labs(x = "Time", y = "Number of Cumulative Mutations") +
   theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
+  geom_vline(aes(xintercept = 0), linetype = "dotdash") +
   scale_x_continuous(breaks=seq(0, 150, 50)) +
-  geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red") +
-  geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash") +
+ 
+   geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red") +
+ 
   geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple")
 
 increase.mutations.plot
@@ -462,7 +553,7 @@ mutations.derivative <- ggplot(cum.strains.derivative, aes(x = vtime, y = deriva
   facet_grid(pop.size~rnott, scales = "free_y") +
   labs(x = "Time", y = "Number of Mutations, Prime") +
   theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
-  scale_x_continuous(breaks=seq(0, 150, 50)) +
+  #scale_x_continuous(breaks=seq(0, 150, 50)) +
   theme(strip.background = element_blank()) + 
   geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red", size = 1) +
   geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash", size = 1) +
@@ -596,10 +687,14 @@ save_plot(paste0(fig_path, "time.scatter.pdf"), time.scatter, base_height = 8, b
 trajectory.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  trajectories <- combine_time_records(time.records)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  time.records.a <- align_time_series_all(time.records[epidemic.index])
+  trajectories <- combine_time_records(time.records.a)
   trajectories <- cbind(trial.params, trajectories)
+  browser()
   return(trajectories)
 })
+
 save(trajectory.master, file = paste0(data_path,"trajectory.master.RData"))
 
 #Sampling 20 random iterations from 100 to plot 

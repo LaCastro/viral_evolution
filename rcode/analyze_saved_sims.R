@@ -25,9 +25,12 @@ combine_time_records <- function(time.records.all) {
   # adds an iteration column to each entry
   # combines into a dataframe 
   # useful for plotting 
+  browser()
   for (iter in 1:length(time.records.all)) {
+ 
     time.records.all[[iter]] <- cbind(iter, time.records.all[[iter]])
   }
+  browser()
   time.records.all  <- do.call("rbind", time.records.all) 
   return(time.records.all)
 }
@@ -54,11 +57,11 @@ combine_mutations <- function(time.records) {
   # subsets to just time and cum strains
   # combines into a dataframe 
   num.mutations.master <- ldply(.data = time.records, function(x) {
-    time.cum.mutations <- data.frame(cbind(x[,"vtime"], x[,"cum.strains"]))
+    time.cum.mutations <- data.frame(cbind(x[,"vtime"], x[,"shifted.time"],x[,"cum.strains"]))
     return(time.cum.mutations)
   })
   #time.records.all  <- do.call("rbind", time.records.all) 
-  colnames(num.mutations.master) <- c("vtime", "cum.strains")
+  colnames(num.mutations.master) <- c("vtime", "shifted.time","cum.strains")
   return(num.mutations.master)
 }
 
@@ -223,9 +226,7 @@ infected_trial <- function(time.record, trial.N) {
 }
 
 all_total_infected <- function(time.records, trial.N) {
-  #browser()
   all.infected <- laply(.data = time.records, .fun = function(x) {
-    #browser()
     final.infected = infected_trial(x, trial.N)
   })
  return(unlist(all.infected))
@@ -379,16 +380,17 @@ align_time_series <- function(trial) {
   if (nrow(trial.before) > 0) {
     trial.before$shifted.time <- -rev(seq(1:nrow(trial.before)))
     trial.after <- filter(trial, vtime >= max.time)
-    trial.after$shifted.time <-
-      seq(from = 0, to = (nrow(trial.after) - 1), by = 1)
+    trial.after$shifted.time <- seq(from = 0, to = (nrow(trial.after) - 1), by = 1)
     trial.shifted <- rbind(trial.before, trial.after)
   } else {
-    trial$shifted <- trial$vtime
+    trial.shifted <- trial
+    trial.shifted$shifted.time <- trial.shifted$vtime
   }
   return(trial.shifted)
 }
 
 align_time_series_all <- function(time.records) {
+  
   time.records.a <- llply(.data = time.records, function(x) {
     trial <- align_time_series(x)
     return(trial)
@@ -396,5 +398,15 @@ align_time_series_all <- function(time.records) {
   return(time.records.a)
 }
 
+#Function to identify entries that are epidemics and ones that are not 
+get_epidemic_index <- function(time.records, threshold.prev, threshold.prop, trial.N) {
+  final.infected.trial <- data.frame(all_total_infected(time.records = time.records, trial.N = trial.N))
+  epidemics.prop <- which(final.infected.trial > threshold.prop)
+  max.infected <- all_max_infected(time.records)
+  epidemics.prev <- which(max.infected > (threshold.prev*trial.N))
+  #browser()
+  epidemic.trials <- intersect(epidemics.prop, epidemics.prev)
+  return(epidemic.trials)
+}
 
 
