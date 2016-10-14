@@ -25,13 +25,7 @@ combine_time_records <- function(time.records.all) {
   # adds an iteration column to each entry
   # combines into a dataframe 
   # useful for plotting 
-  browser()
-  for (iter in 1:length(time.records.all)) {
- 
-    time.records.all[[iter]] <- cbind(iter, time.records.all[[iter]])
-  }
-  browser()
-  time.records.all  <- do.call("rbind", time.records.all) 
+  time.records.all <- rbindlist(time.records.all, idcol = "iter")
   return(time.records.all)
 }
 

@@ -5,7 +5,7 @@ rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-sapply(c('analyze_saved_sims.R', 'run_mutate_branch.R'), source)
+sapply(c('analyze_saved_sims.R'), source)
 library(deSolve)
 library(ggplot2)
 library(grid)
@@ -25,7 +25,6 @@ if(grepl('laurencastro', Sys.info()['login'])) fig_path <- "~/Documents/projects
 # Data Path 
 if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/"
 if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
-
 
 # Reading in files from saved data runs for chosen R0s and popsizes
 N = c(100, 1000, 10000)
@@ -130,11 +129,65 @@ cum.strains.master %>% group_by(rnott, pop.size, shifted.time) %>%
   filter(rnott %in% desired.rnotts) -> cum.strains.avg
 
 # 4. Trajectories Plots of Entropy - should I align these? 
+metrics.trajectory <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  if (epidemic.index[1] > 0) {
+  time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+  trajectories <- combine_time_records(time.records.a)
+  trajectories <- cbind(trial.params, trajectories)
+  return(trajectories)
+  }
+})
+
+# Summarise and if want to filter based on rnotts do it here 
+metrics.trajectory %>% group_by(rnott, pop.size, shifted.time) %>%
+  summarise(avg.entropy = mean(entropy), 
+            sd.entropy = sd(entropy),
+            avg.diversity = mean(diversity),
+            sd.diversity = sd(diversity),
+            avg.strains = mean(cir.strains),
+            sd.strains = sd(cir.strains)) %>%
+  gather(average.metric, average.value, avg.entropy, avg.diversity, avg.strains) %>%
+  gather(sd.metric, sd.value, sd.entropy, sd.diversity, sd.strains) %>%
+  filter(average.metric == "avg.strains" ) -> strains.avg #%>%
+  #filter(rnott %in% desired.rnotts) 
+
+trajectory.entropy <- ggplot(entropy.avg, aes(x = shifted.time, y = average.value)) + 
+  geom_ribbon(aes(ymin = (average.value - sd.value), ymax = (average.value + sd.value)), 
+              alpha = .1, fill="steelblue2", color="steelblue2") +
+  geom_line(size = 2, color = "black") + facet_grid(pop.size ~ rnott, scales = "free") 
+
+trajectory.strains <- ggplot(strains.avg, aes(x = shifted.time, y = average.value)) + 
+ # geom_ribbon(aes(ymin = (average.value - sd.value), ymax = (average.value + sd.value)), 
+  #            alpha = .1, fill="steelblue2", color="steelblue2") +
+  geom_line(size = 2, color = "black") + facet_grid(pop.size ~ rnott, scales = "free") +
+  geom_vline(xintercept = 0, color = "orange", lty = 2, size = .75)
 
 
+# 5. Trajectories of Derivatives   
+### Need to take the derivative of all first before averaging 
+metrics.trajectory %>%group_by(rnott, pop.size, iter) %>%
+  mutate(derivative.strains = cum.strains - lag(cum.strains, default = cum.strains[1]),
+         derivative.entropy = entropy - lag(entropy, default = entropy[1]),
+         derivative.diversity = diversity - lag(diversity, default= diversity[1]), 
+         derivative.cir.strains = cir.strains - lag(cir.strains, default = cir.strains[1])) -> metrics.trajectory.derivative
 
+metrics.trajectory.derivative %>% filter(rnott %in% desired.rnotts & iter %in% iter.samples ) -> derivative.short.subset
 
-
+ggplot(derivative.short.subset, aes(x = shifted.time, y = derivative.diversity)) +
+  geom_line(aes(group  = iter, color = iter), alpha = .5) + guides(color = FALSE)+
+  facet_grid(pop.size~rnott, scales = "free_y") +
+  labs(x = "Time", y = "Delta Diversity") +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
+  geom_smooth() +
+  #scale_x_continuous(breaks=seq(0, 150, 50)) +
+  theme(strip.background = element_blank())  +
+  geom_vline(xintercept = 0, color = "orange", lty = 2)
+#  geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red", size = 1) +
+#  geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash", size = 1) +
+#  geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple", size = 1)
 
 
 
@@ -291,14 +344,9 @@ increase.mutations.plot <- ggplot(cum.strains.avg, aes(x = shifted.time, y = avg
   theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
   geom_vline(aes(xintercept = 0), linetype = "dotdash") +
   scale_x_continuous(breaks=seq(0, 150, 50)) +
-  
   geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red") +
-  
   geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple")
-
-increase.mutations.plot
-save_plot(paste0(fig_path, "increase.mutations.long.range.pdf"), increase.mutations.plot, base_height = 8, base_aspect_ratio = 2)
-
+#save_plot(paste0(fig_path, "increase.mutations.long.range.pdf"), increase.mutations.plot, base_height = 8, base_aspect_ratio = 2)
 
 
 # Looking at the derivative of increase mutations
@@ -309,11 +357,6 @@ cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand 
   cum.strains.trial = cbind(trial.params, cum.strains.trial)
   return(cum.strains.trial)
 })
-
-
-desired.rnotts <- seq(0.9, 1.9, .2)
-desired.rnotts <- c(.9, seq(1,4,1))
-
 
 time.max.groups <- group_by(time.max.master, rnott, pop.size) %>%
   summarise(infect = mean(max.infect),
