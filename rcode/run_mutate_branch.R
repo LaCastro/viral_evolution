@@ -7,7 +7,7 @@ rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-sapply(c('evo_functions.R', 'sir_mutation_func.R', 'analyze_saved_sims.R', 'plotting_functions.R'), source)
+sapply(c('analyze_saved_sims.R', 'plotting_functions.R'), source)
 
 
 library(deSolve)
