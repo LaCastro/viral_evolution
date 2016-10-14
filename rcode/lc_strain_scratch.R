@@ -153,4 +153,11 @@ long.strains.master <- adply(.data = sample, .margins = 1, function(x) {
   return(long.strains.m)
 })
 
-
+# Clonal Interference Graph 
+rnott.1.5.pop.1000 <- ggplot(data = long.strains.master, aes(x = time, y = frequency, fill = strain.name)) +
+  facet_wrap(~ X1, scales = "free") +
+  geom_area(color = 'black', size = .2, alpha = .4) + guides(fill = FALSE) +
+  geom_vline(data = time.max.samples.long, aes(xintercept = jitter(value, .15), color = type), size = 1.25, alpha = .85) +
+  scale_color_manual(values = c("darkorange1", "mediumblue", "purple", "black")) +
+  theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
+  labs(x = "Time", y = "Frequency")

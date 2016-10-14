@@ -409,4 +409,16 @@ get_epidemic_index <- function(time.records, threshold.prev, threshold.prop, tri
   return(epidemic.trials)
 }
 
-
+set_epidemic_criteria <- function(time.records, threshold.prev, threshold.prop) {
+  epidemic.trials <- alply(.data = data.files, .margins = 1, function(x) {
+    load(as.character(x$file.list))
+    trial.params <- get_params(x)
+    # Set thresholds here 
+    epidemic.trials <- get_epidemic_index(time.records, trial.N = trial.params$pop.size, 
+                                          threshold.prev = threshold.prev, threshold.prop = threshold.prop)
+    if (length(epidemic.trials) == 0) epidemic.trials <- 0
+    epidemic.trials <- cbind(trial.params, epidemic.trials)
+    return(epidemic.trials)
+  })
+  return(epidemic.trials)
+}
