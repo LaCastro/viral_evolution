@@ -42,3 +42,15 @@ plot_max_times <- function(time.records.all, type) {
 }
 
 
+
+plot.metric.at.maxinfect <- function(master.data, desired.rnotts, desired.metric) {
+  master.data %>% filter(rnott %in% desired.rnotts) %>%
+    group_by(rnott, pop.size) %>% 
+    gather(metric, value, 3:6) %>%
+    filter(metric == desired.metric) -> metric.at.maxinfect
+  
+  plot.metric <- ggplot(metric.at.maxinfect, aes(x = factor(rnott), y = value, group = factor(rnott))) + 
+    geom_boxplot() + facet_wrap(~pop.size) +
+    labs(x = expression("R"[0]), y = desired.metric)
+  return(plot.metric)
+}

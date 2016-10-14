@@ -44,31 +44,47 @@ SIRfunc=function(t, x, vparameters){
 
 
 ##################################################################################
-##################################################################################
 # Set up initial conditions
 ##################################################################################
-N = 10000    # population size
-I_0 = 10     # number intially infected people in the population
-S_0 = N-I_0
+# Simulate the model with deterministic ODE's, so that we have something
+# to compare our stochastic simulation to--this will underestimate because of the time difference 
+##################################################################################
+N = 10000# population size 
+I_0 = 100     # number intially infected people in the population
 R_0 = 0      # assume no one has recovered at first
+delta_t = 1      # nominal time step
+tbeg  = 1           # begin day
+tend  = 200 # end day
+gamma = 1/3  
+R0 = 1.01
+beta = R0*gamma
 
-delta_t = .1      # nominal time step
-tbeg  = 0           # begin day
-tend  = 120         # end day
-gamma = 1/5         # recovery period of influenza in days^{-1}
-R0    = 1.5         # R0 of a hypothetical strain of pandemic influenza
-beta = R0*gamma     # "reverse engineer" beta from R0 and gamma
+#N = 1000
+#R0 = 1.5
+N = c(100, 1000, 10000)
+r0_seq = c(seq(0.9, 2, .1))
 
-##################################################################################
-# first simulate the model with deterministic ODE's, so that we have something
-# to compare our stochastic simulation to.
-##################################################################################
-vt = seq(tbeg,tend,delta_t)
-vparameters = c(gamma=gamma,beta=beta)
-inits = c(S=S_0,I=I_0,R=R_0)
+file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
+combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
+data.files <- data.frame(cbind(combos, file.list))
 
-sirmodel = as.data.frame(lsoda(y = inits, times = vt, func = SIRfunc, parms = vparameters))
-sirmodel$I_N = sirmodel$I/N #Getting Percentage Infected (Prevalence)
+# Analysis to Get What Deterministic Average Would Be 
+deterministic.prop <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  trial.params <- get_params(x)
+  N = trial.params$pop.size
+  R0 = trial.params$rnott
+  beta = R0*gamma
+  
+  vt = seq(tbeg,tend,delta_t)
+  vparameters = c(gamma=gamma,beta=beta)
+  
+  inits = c(S=N-I_0,I=I_0,R=R_0)
+  
+  sirmodel = as.data.frame(lsoda(y = inits, times = vt, func = SIRfunc, parms = vparameters))
+  prop = (N-min(sirmodel$S))/N
+  prop.data <- cbind(trial.params, prop)
+  return(prop.data)
+})
 
 ##################################################################################
 # now plot the results of the deterministic model
@@ -169,6 +185,11 @@ sampling <- ggplot(runs.master.m, aes(x = time, y = value, color = as.factor(var
 sampling
 
 
+
+
+
+
+
 ############## Erlang Distribution
 SIRfunc_erlang=function(t, x, vparameters){
   k = length(x)-2
@@ -191,12 +212,6 @@ SIRfunc_erlang=function(t, x, vparameters){
     list(out)
   })
 }
-
-
-
-
-
-
 
 
 N = 10000    # population size
