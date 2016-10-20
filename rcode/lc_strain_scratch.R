@@ -1,12 +1,11 @@
 ### Script for Analyzing Based on strains records
-
-
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
 sapply(c('analyze_saved_sims.R', 'run_mutate_branch.R'), source)
 
 ## Setting Up Figure and Path directions
+
 # Figure Path
 if(grepl('meyerslab', Sys.info()['login'])) fig_path = "~/Documents/projects/viral_evolution/viral_evolution_repo/figs/"
 if(grepl('laurencastro', Sys.info()['login'])) fig_path <- "~/Documents/projects/viral_evolution/figs/"
@@ -21,9 +20,13 @@ N = c(100, 1000, 10000)
 r0_seq = c(seq(0.9, 2, .2), seq(2,5, 0.5))
 
 
-file.list <- get_vec_of_files(dir_path = data_path, type = "strain", r0_seq, N)
+file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
-data.files <- data.frame(cbind(combos, file.list))
+data.files.trial <- data.frame(cbind(combos, file.list))
+
+epidemic.trials <- set_epidemic_criteria(time.records, threshold.prev = .025, threshold.prop = .25)
+data.files$epidemic.trials <- epidemic.trials
+
 
 ######## Getting Final Times across R0s and popsizes 
 # Get trajectories of infected to see what is occuring when R0 ~ 1
@@ -137,6 +140,34 @@ plot.dead.end.freq <- ggplot(mutant.life.proportion, aes(y = freq.dead, x = fact
 
 
 # function to go into strain.records and put frequency into long form
+desired.rnotts <- c(0.9, 1.5, 2.5)
+sample <- sample(1:100, 5)
+
+
+epidemic.trials <- set_epidemic_criteria(data.files.trial, threshold.prev = .025, threshold.prop = .25)
+data.files.trial$epidemic.trials <- epidemic.trials
+
+## First get time at max for each trial
+# Build in max number of circulating strains to see what the clonal interference chart looks lik 
+time.max.master <- adply(.data = data.files.trial, .margins = 1, .id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  #epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  max.infect <- all_time_max_infected(time.records)
+  max.diversity <- all_time_max_diversity(time.records)
+  max.entropy <- all_time_max_entropy(time.records)
+  iter <- seq(1:100)
+  max.times.trial <- cbind(trial.params,iter, max.infect, max.diversity, max.entropy)
+  return(max.times.trial)
+})
+
+time.max.master %>% filter(iter %in% sample & pop.size == 1000) -> time.max.sample
+
+file.list <- get_vec_of_files(dir_path = data_path, type = "strain", desired.rnotts, N)
+combos <- sort(apply(expand.grid(desired.rnotts, N), 1, paste, collapse = "_", sep = "")) 
+data.files.strain <- data.frame(cbind(combos, file.list))
+
+
 long.strains <- function(index, strain.records) {
   trial.strain.record <- strain.records[[index]]
   trial.strain.record$time <- seq(1:nrow(trial.strain.record))
@@ -148,16 +179,27 @@ long.strains <- function(index, strain.records) {
 ## Sampling 20/100 strain records
 sample <- sample(x = seq(1:100), size = 20)
 
-long.strains.master <- adply(.data = sample, .margins = 1, function(x) {
-  long.strains.m <- long.strains(x, strain.records)
-  return(long.strains.m)
+long.strains.master <- adply(.data = data.files.strain, .margins = 1,.id = NULL, .expand = FALSE, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  long.strain.df <- adply(.data = sample, .margins = 1, function(x) {
+    long.strains.m <- long.strains(x, strain.records)
+    return(long.strains.m)
+  })
+  long.strain.df <- cbind(trial.params, long.strain.df)
+  return(long.strain.df)
 })
 
+long.strains.master %>% filter(pop.size == 1000) -> long.strains.sample
+
 # Clonal Interference Graph 
-rnott.1.5.pop.1000 <- ggplot(data = long.strains.master, aes(x = time, y = frequency, fill = strain.name)) +
-  facet_wrap(~ X1, scales = "free") +
-  geom_area(color = 'black', size = .2, alpha = .4) + guides(fill = FALSE) +
-  geom_vline(data = time.max.samples.long, aes(xintercept = jitter(value, .15), color = type), size = 1.25, alpha = .85) +
-  scale_color_manual(values = c("darkorange1", "mediumblue", "purple", "black")) +
+time.max.sample %>% gather(metric, value, 4:6) -> time.max.sample.long
+
+long.strains.sample
+ci.pop.1000 <- ggplot2::ggplot(data = long.strains.sample, aes(x = time, y = frequency, fill = strain.name)) +
+  facet_grid(rnott ~ iter) +
+  geom_area(color = "black", size = .2, alpha = .4) + guides(fill = FALSE) +
+  geom_vline(data = time.max.sample.long, aes(xintercept = jitter(value, .15), color = metric), size = 1.25, alpha = .85) +
+  scale_color_manual(values = c("darkorange1", "mediumblue", "purple")) +
   theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
   labs(x = "Time", y = "Frequency")

@@ -5,7 +5,7 @@ rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-sapply(c('analyze_saved_sims.R'), source)
+sapply(c('analyze_saved_sims.R', 'plotting_functions.R'), source)
 library(deSolve)
 library(ggplot2)
 library(grid)
@@ -15,7 +15,9 @@ library(reshape2)
 library(plyr)
 library(dplyr)
 library(tidyr)
+#library(tidyverse)
 library(data.table)
+
 
 ## Setting Up Figure and Path directions
 # Figure Path
@@ -36,7 +38,7 @@ data.files <- data.frame(cbind(combos, file.list))
 
 # Deciding which trials are epidemics based on a threshold 
 # for prevalance and total proportion infected
-epidemic.trials <- set_epidemic_criteria(time.records, threshold.prev = .025, threshold.prop = .25)
+epidemic.trials <- set_epidemic_criteria(data.files.trial, threshold.prev = .025, threshold.prop = .25)
 data.files$epidemic.trials <- epidemic.trials
 
 
@@ -141,17 +143,22 @@ metrics.trajectory <- adply(.data = data.files, .margins = 1,.id=NULL, .expand =
   }
 })
 
+
+
 # Summarise and if want to filter based on rnotts do it here 
+# create a function to do this and give you which metric you're looking for 
 metrics.trajectory %>% group_by(rnott, pop.size, shifted.time) %>%
-  summarise(avg.entropy = mean(entropy), 
+  dplyr::summarise(avg.entropy = mean(entropy), 
             sd.entropy = sd(entropy),
             avg.diversity = mean(diversity),
             sd.diversity = sd(diversity),
             avg.strains = mean(cir.strains),
             sd.strains = sd(cir.strains)) %>%
-  gather(average.metric, average.value, avg.entropy, avg.diversity, avg.strains) %>%
-  gather(sd.metric, sd.value, sd.entropy, sd.diversity, sd.strains) %>%
-  filter(average.metric == "avg.strains" ) -> strains.avg #%>%
+  tidyr::gather(metric, value, avg.entropy, avg.diversity, avg.strains, 
+                sd.entropy, sd.diversity, sd.strains) %>%
+  #tidyr::gather(sd.metric, sd.value, sd.entropy, sd.diversity, sd.strains) %>%
+  filter(metric %in% c("avg.strains", "sd.strains")) %>%
+  spread(metric, value) -> strains.avg #%>%
   #filter(rnott %in% desired.rnotts) 
 
 trajectory.entropy <- ggplot(entropy.avg, aes(x = shifted.time, y = average.value)) + 
@@ -159,37 +166,63 @@ trajectory.entropy <- ggplot(entropy.avg, aes(x = shifted.time, y = average.valu
               alpha = .1, fill="steelblue2", color="steelblue2") +
   geom_line(size = 2, color = "black") + facet_grid(pop.size ~ rnott, scales = "free") 
 
-trajectory.strains <- ggplot(strains.avg, aes(x = shifted.time, y = average.value)) + 
- # geom_ribbon(aes(ymin = (average.value - sd.value), ymax = (average.value + sd.value)), 
-  #            alpha = .1, fill="steelblue2", color="steelblue2") +
+trajectory.strains <- ggplot(strains.avg, aes(x = shifted.time, y = avg.strains)) + 
+  geom_ribbon(aes(ymin = (avg.strains - sd.strains), ymax = (avg.strains + sd.strains)), 
+              alpha = .4, fill="steelblue2", color="steelblue2") +
   geom_line(size = 2, color = "black") + facet_grid(pop.size ~ rnott, scales = "free") +
   geom_vline(xintercept = 0, color = "orange", lty = 2, size = .75)
 
 
 # 5. Trajectories of Derivatives   
 ### Need to take the derivative of all first before averaging 
-metrics.trajectory %>%group_by(rnott, pop.size, iter) %>%
-  mutate(derivative.strains = cum.strains - lag(cum.strains, default = cum.strains[1]),
+metrics.trajectory %>% group_by(rnott, pop.size, iter) %>%
+  mutate(derivative.mutations = cum.strains - lag(cum.strains, default = cum.strains[1]),
          derivative.entropy = entropy - lag(entropy, default = entropy[1]),
          derivative.diversity = diversity - lag(diversity, default= diversity[1]), 
          derivative.cir.strains = cir.strains - lag(cir.strains, default = cir.strains[1])) -> metrics.trajectory.derivative
 
 metrics.trajectory.derivative %>% filter(rnott %in% desired.rnotts & iter %in% iter.samples ) -> derivative.short.subset
 
-ggplot(derivative.short.subset, aes(x = shifted.time, y = derivative.diversity)) +
+raw.cum.strains <- ggplot(derivative.short.subset, aes(x = shifted.time, y = derivative.mutations)) +
   geom_line(aes(group  = iter, color = iter), alpha = .5) + guides(color = FALSE)+
   facet_grid(pop.size~rnott, scales = "free_y") +
-  labs(x = "Time", y = "Delta Diversity") +
+  labs(x = "Shifted Time", y = "Delta Cumulative Strains") +
   theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
   geom_smooth() +
-  #scale_x_continuous(breaks=seq(0, 150, 50)) +
   theme(strip.background = element_blank())  +
   geom_vline(xintercept = 0, color = "orange", lty = 2)
-#  geom_vline(data = time.max.groups, aes(xintercept = diversity), linetype = 2, color = "red", size = 1) +
-#  geom_vline(data = time.max.groups, aes(xintercept = infect), linetype = "dotdash", size = 1) +
-#  geom_vline(data = time.max.groups, aes(xintercept = entropy), linetype = "twodash", color = "purple", size = 1)
+
+save_plot(filename = paste(fig_path, "raw.delta.cum.strains.pdf"), raw.cum.strains, base_height = 8, base_aspect_ratio = 1.5)
+
+# Average of the derivatives 
+metrics.trajectory.derivative %>% group_by(rnott, pop.size, shifted.time) %>%
+  summarise(avg.d.cum.strains = mean(derivative.mutations), 
+                   sd.d.cum.strains = sd(derivative.mutations),
+                   avg.d.diversity = mean(derivative.diversity),
+                   sd.d.diversity = sd(derivative.diversity),
+                   avg.d.entropy = mean(derivative.entropy),
+                   sd.d.entropy = sd(derivative.entropy),
+                   avg.d.cir.strains = mean(derivative.cir.strains),
+                   sd.d.cir.strains = sd(derivative.cir.strains)) %>%
+  gather(metric, value, 4:11) %>%
+  filter(metric %in% c("avg.d.entropy", "sd.d.entropy")) %>%
+  spread(metric, value) -> delta.avg.entropy
 
 
+delta.avg.cir.strains %>% 
+  filter(rnott %in% desired.rnotts) %>% 
+  ggplot(aes(x = shifted.time, y = avg.d.cir.strains)) +
+  geom_line() + geom_ribbon(aes(ymin = (avg.d.cir.strains - sd.d.cir.strains), ymax = (avg.d.cir.strains + sd.d.cir.strains)),
+           alpha = .5, fill="steelblue2", color="steelblue2") +
+  facet_grid(pop.size~rnott, scales = "free_y") +
+  labs(x = "Shifted Time", y = "Delta Circulating Strains") +
+  theme(axis.text.x  = element_text(angle=45, vjust=0.5, size=12)) +
+  theme(strip.background = element_blank())  +
+  geom_vline(xintercept = 0, color = "orange", lty = 2, size = 1) -> delta.avg.cir.strains.plot.long
+
+
+save_plot(filename = paste0(fig_path, "delta.avg.entropy.pdf"), delta.avg.entropy.plot,
+          base_height = 8, base_aspect_ratio = 1.5)
 
 ##########################################
 # Metrics Analysis 
@@ -288,9 +321,11 @@ max.infect.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, 
   return(metrics)
 })
 
-plot.metric.at.maxinfect(max.infect.metrics.master, desired.rnotts = r0_seq, desired.metric = "diversity")
 
+entropy.at.max <- plot.metric.at.maxinfect(max.infect.metrics.master, 
+                                             desired.rnotts = r0_seq, desired.metric = "entropy")
 
+save_plot(filename = paste0(fig_path, 'entropy.at.max.pdf'), entropy.at.max, base_height = 8, base_aspect_ratio = 1.5)
 # 6. Code for combining beginning threshold metrics and plotting 
 beg.threshold.metrics.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
@@ -313,7 +348,7 @@ threshold.plot <-ggplot(beg.threshold.metrics.m, aes(factor(rnott), value)) +
 #save_plot(paste0(fig_path, "beg.threshold.entropy.short.pdf"), threshold.plot, base_height = 8, base_aspect_ratio = 1.2)
 
 # Combine the time points of max genetic metrics and infections 
-time.max.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+time.max.master <- adply(.data = data.files.trial, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials

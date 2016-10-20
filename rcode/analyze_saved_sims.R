@@ -403,7 +403,7 @@ get_epidemic_index <- function(time.records, threshold.prev, threshold.prop, tri
   return(epidemic.trials)
 }
 
-set_epidemic_criteria <- function(time.records, threshold.prev, threshold.prop) {
+set_epidemic_criteria <- function(data.files, threshold.prev, threshold.prop) {
   epidemic.trials <- alply(.data = data.files, .margins = 1, function(x) {
     load(as.character(x$file.list))
     trial.params <- get_params(x)
@@ -416,3 +416,6 @@ set_epidemic_criteria <- function(time.records, threshold.prev, threshold.prop) 
   })
   return(epidemic.trials)
 }
+
+
+
