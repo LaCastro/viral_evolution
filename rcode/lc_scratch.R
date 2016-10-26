@@ -30,16 +30,16 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 
 # Reading in files from saved data runs for chosen R0s and popsizes
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 2, .2), seq(2,5, 0.5))
+r0_seq = c(0.9, 1.3, 1.7)
 
 file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
-data.files <- data.frame(cbind(combos, file.list))
+data.files.trial <- data.frame(cbind(combos, file.list))
 
 # Deciding which trials are epidemics based on a threshold 
 # for prevalance and total proportion infected
 epidemic.trials <- set_epidemic_criteria(data.files.trial, threshold.prev = .025, threshold.prop = .25)
-data.files$epidemic.trials <- epidemic.trials
+data.files.trial$epidemic.trials <- epidemic.trials
 
 
 #########################################################
@@ -52,6 +52,7 @@ trajectories <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, fu
   trial.params <- get_params(x)
   epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
   time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+  browser()
   vI.trajectory <- combine_time_records(time.records.a)
   vI.trajectory <- cbind(trial.params, vI.trajectory)
   return(vI.trajectory)
@@ -261,11 +262,19 @@ final.infected.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expa
   final.infected.trial <- cbind(trial.params, final.infected.trial)
   return(final.infected.trial)
 })
+
+final.infected.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+ # epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  final.infected.trial <- data.frame(all_total_infected(time.records = time.records, trial.N = trial.params$pop.size))
+  final.infected.trial <- cbind(trial.params, final.infected.trial)
+  return(final.infected.trial)
+})
 colnames(final.infected.master)[3] <- "prop.infected"
 
 ggplot(final.infected.master, aes(factor(rnott), prop.infected)) + geom_jitter(alpha = .5) + 
-  geom_violin(alpha = .5) + facet_wrap(~pop.size, nrow =1 ) + geom_hline(yintercept = .13, color = "purple") +
-  geom_hline(yintercept = .25, color = "orange")
+  facet_wrap(~pop.size, nrow =1 ) + geom_hline(yintercept = .25, color = "orange")
 
 # 3. Maximum number of people infected at a single time
 maximum.prevalance <- adply(.data = data.files, .margins = 1, .id= NULL, .expand = F, function(x) {
@@ -281,13 +290,27 @@ ggplot(data = maximum.prevalance, aes(max.prev))+geom_histogram(bins = 20) +
   facet_grid(rnott~pop.size, scales = "free_x") 
 
 # 3. Comparing the relationship between proportion and maximum prevalance-used to help determine threshold 
-meta.data.master <- cbind(final.infected.master, final.time.master[,3]); colnames(meta.data.master)[4] <- "days"
-colnames(meta.data.master) <- c("rnott", "pop.size", "prop.infected", "days", "max.prev", "ratio")
+meta.data.master <- cbind(final.infected.master, maximum.prevalance[,3]); colnames(meta.data.master)[4] <- "max.prev"
+meta.data.master %>% filter(rnott < 1.3) -> meta.data.r0
+
 
 # Trying Different Relationships 
 ggplot(data = meta.data.master, aes(x = ratio, y = prop.infected)) + geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x")
 ggplot(data = meta.data.prop25, aes(x = days, y = prop.infected)) + geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x")
-ggplot(meta.data.two.critera, aes(x = max.prev, y = prop.infected)) + geom_jitter(alpha = .5) + facet_grid(rnott~pop.size, scales = "free_x")
+
+head(meta.data.master)
+
+threshold <- select(meta.data.master, rnott, pop.size) %>%
+  distinct(rnott, pop.size) %>%
+  group_by(pop.size) %>%
+  mutate(thres.prev = .025*pop.size)
+
+epidemic.criteria <- ggplot(meta.data.master, aes(x = max.prev, y = prop.infected)) + geom_jitter(alpha = .5) + 
+  facet_grid(rnott~pop.size, scales = "free_x") +
+  geom_hline(yintercept = .25, color = "orange") +
+  geom_vline(data = threshold, aes(xintercept = thres.prev), color = "purple")
+
+save_plot(filename = paste0(fig_path, "epidemic.criteria.pdf"), plot = epidemic.criteria, base_height = 8, base_aspect_ratio = 1.5)  
 
 # 4. Calculate max metrics for all-at moximum of the metric itself 
 max.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {

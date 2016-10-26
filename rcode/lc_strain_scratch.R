@@ -25,7 +25,7 @@ combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")
 data.files.trial <- data.frame(cbind(combos, file.list))
 
 epidemic.trials <- set_epidemic_criteria(time.records, threshold.prev = .025, threshold.prop = .25)
-data.files$epidemic.trials <- epidemic.trials
+data.files.trial$epidemic.trials <- epidemic.trials
 
 
 ######## Getting Final Times across R0s and popsizes 
@@ -149,6 +149,26 @@ data.files.trial$epidemic.trials <- epidemic.trials
 
 ## First get time at max for each trial
 # Build in max number of circulating strains to see what the clonal interference chart looks lik 
+
+trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  if (epidemic.index[1] > 0) {
+  time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+  vI.trajectory <- combine_time_records(time.records.a)
+  vI.trajectory <- cbind(trial.params, vI.trajectory)
+  vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
+  return(vI.trajectory)
+  }
+})
+
+trajectories %>% filter(iter == 31 & pop.size == 1000) %>%
+  group_by(rnott, pop.size) %>%
+  select(vtime, shifted.time, diversity, entropy) -> trajectories.sample
+
+
+
 time.max.master <- adply(.data = data.files.trial, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
@@ -161,23 +181,15 @@ time.max.master <- adply(.data = data.files.trial, .margins = 1, .id=NULL, .expa
   return(max.times.trial)
 })
 
-time.max.master %>% filter(iter %in% sample & pop.size == 1000) -> time.max.sample
+time.max.master %>% filter(iter == 31 & pop.size == 1000) %>%
+  gather(metric, value, 4:6) -> time.max.sample
 
-file.list <- get_vec_of_files(dir_path = data_path, type = "strain", desired.rnotts, N)
-combos <- sort(apply(expand.grid(desired.rnotts, N), 1, paste, collapse = "_", sep = "")) 
+file.list <- get_vec_of_files(dir_path = data_path, type = "strain", r0_seq, N)
+combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
 data.files.strain <- data.frame(cbind(combos, file.list))
 
-
-long.strains <- function(index, strain.records) {
-  trial.strain.record <- strain.records[[index]]
-  trial.strain.record$time <- seq(1:nrow(trial.strain.record))
-  strain.record.long <- gather(trial.strain.record, strain.name, frequency, -iter, -time)
-  strain.record.long[is.na(strain.record.long)] <- 0
-  return(strain.record.long)
-}
-
 ## Sampling 20/100 strain records
-sample <- sample(x = seq(1:100), size = 20)
+sample = 31
 
 long.strains.master <- adply(.data = data.files.strain, .margins = 1,.id = NULL, .expand = FALSE, function(x) {
   load(as.character(x$file.list))
@@ -193,13 +205,22 @@ long.strains.master <- adply(.data = data.files.strain, .margins = 1,.id = NULL,
 long.strains.master %>% filter(pop.size == 1000) -> long.strains.sample
 
 # Clonal Interference Graph 
-time.max.sample %>% gather(metric, value, 4:6) -> time.max.sample.long
+#time.max.sample %>% gather(metric, value, 4:6) -> time.max.sample.long
 
-long.strains.sample
+
 ci.pop.1000 <- ggplot2::ggplot(data = long.strains.sample, aes(x = time, y = frequency, fill = strain.name)) +
-  facet_grid(rnott ~ iter) +
-  geom_area(color = "black", size = .2, alpha = .4) + guides(fill = FALSE) +
-  geom_vline(data = time.max.sample.long, aes(xintercept = jitter(value, .15), color = metric), size = 1.25, alpha = .85) +
-  scale_color_manual(values = c("darkorange1", "mediumblue", "purple")) +
-  theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
+  facet_wrap(~rnott, nrow = 3) +
+  geom_area(color = "black", size = .2, alpha = .3) + guides(fill = FALSE) +
+  geom_vline(data = time.max.sample, aes(xintercept = jitter(value, .25), color = metric), size = 1.25, alpha = .85) +
+  scale_color_manual(values = c("black", "mediumblue", "purple"), guide = FALSE) + 
+  #theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
   labs(x = "Time", y = "Frequency")
+
+diversity.plot <- ggplot(trajectories.sample, aes(x = vtime, y = diversity)) + facet_wrap(~rnott, nrow = 3) +
+  geom_line(color = "black", size = 2)
+
+entropy.plot <- ggplot(trajectories.sample, aes(x = vtime, y = entropy)) + facet_wrap(~rnott, nrow = 3) +
+  geom_line(color = "blue4", size = 2)
+
+combined <- plot_grid(ci.pop.1000, diversity.plot, entropy.plot, nrow = 1)
+save_plot(filename = paste0(fig_path, "combined.CI2.pdf"), combined, base_height = 8, base_aspect_ratio = 1.9)

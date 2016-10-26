@@ -419,3 +419,12 @@ set_epidemic_criteria <- function(data.files, threshold.prev, threshold.prop) {
 
 
 
+## Puts the strains from time-series into the long format
+long.strains <- function(index, strain.records) {
+  trial.strain.record <- strain.records[[index]]
+  trial.strain.record$time <- seq(1:nrow(trial.strain.record))
+  strain.record.long <- gather(trial.strain.record, strain.name, frequency, -iter, -time)
+  strain.record.long[is.na(strain.record.long)] <- 0
+  return(strain.record.long)
+}
+
