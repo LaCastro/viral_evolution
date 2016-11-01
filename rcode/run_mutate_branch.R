@@ -49,7 +49,7 @@ return(as.list(environment()))
 nrealisations = 1000
 
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 2, .1), seq(2.5,5, 0.5))
+r0_seq = c(seq(0.9, 2, .1), seq(2.5, 5, 0.5))
 r0_seq = c(0.9, 1, 1.1)
 
 if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/trial1000/"
@@ -70,6 +70,10 @@ for (size in 1:length(N)) {
   }
 }
 
+trialat2.bigtimestep <- run_mutate_branches_inc(num_reps = 25, params = 
+                                      epi_mut_params(N=10000, R0 = 2, delta_t = 1, tend = 120, year_mut_rate = 0))
 
-
-
+epi_size_all(trialat2.bigtimestep)
+head(trialat2.bigtimestep[[3]]$time_record)
+beta
+hist(trialat2.bigtimestep[[3]]$time_record$new.infected) 

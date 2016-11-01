@@ -1,4 +1,3 @@
-
 ##################################################################################
 ##################################################################################
 sir_mutation_agent = function(params) {
@@ -39,8 +38,8 @@ sir_mutation_agent = function(params) {
     
     # Time Recrod
     
-    time_record = data.frame(matrix(data=0, ncol = 8))
-    colnames(time_record) = c('vS', 'vI', 'cir.strains', 'cum.strains',
+    time_record = data.frame(matrix(data=0, ncol = 10))
+    colnames(time_record) = c('vS', 'vI', 'new.infected', 'recovered', 'cir.strains', 'cum.strains',
                               'diverge', 'diversity', 'entropy', 'num.mutations')
     time_record$vS = S
     time_record$vI = I
@@ -117,6 +116,7 @@ sir_mutation_agent = function(params) {
       # sample Poisson random numbers of infected people contacted by each person
       avg.num.infected.people.contacted = beta*I*deltat/N
       vnum.infected.people.contacted = rpois(N,avg.num.infected.people.contacted) 
+      
       vprob = runif(N)   # sample uniform random numbers
       vnewstate = vstate # copy the state vector to a temporary vector used for calculations
       new.s.state = strain.state # copy the strain vector to a temporary vector used for calculations
@@ -125,12 +125,13 @@ sir_mutation_agent = function(params) {
       # number is less than the recovery probability
       vnewstate[vstate==1&vprob<recover.prob] = 2   
       recovered_ind = which(vstate==1&vprob<recover.prob)
-      
+      num.recovered = length(recovered_ind)
       
       # If a susceptible contacted at least one infective, they are infected
       vnewstate[vstate==0&vnum.infected.people.contacted>0] = 1 
       new.infects.index = which(vstate==0&vnum.infected.people.contacted>0)
       num.new.infects = length(new.infects.index)
+      infects.per.person = num.new.infects/I
      
       
       vstate = vnewstate # update the state vector
@@ -189,7 +190,7 @@ sir_mutation_agent = function(params) {
       
       cum.strains = length(population.strains)
       
-      time_record <- rbind(time_record, c(S,I, circulating.strains, cum.strains,  
+      time_record <- rbind(time_record, c(S,I, infects.per.person, num.recovered, circulating.strains, cum.strains,  
                                           divergence.time, diversity.time, entropy.time,
                                           num.mutations))
       vtime = append(vtime, t)

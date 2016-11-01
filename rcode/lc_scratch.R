@@ -30,7 +30,7 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 
 # Reading in files from saved data runs for chosen R0s and popsizes
 N = c(100, 1000, 10000)
-r0_seq = c(0.9, 1.3, 1.7)
+r0_seq = c(seq(0.9, 1.9, .2))
 
 file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
@@ -47,17 +47,19 @@ data.files.trial$epidemic.trials <- epidemic.trials
 #########################################################
 
 # 1. Plotting infected time-series/genetic metrics 
-trajectories <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
-  time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
-  browser()
-  vI.trajectory <- combine_time_records(time.records.a)
-  vI.trajectory <- cbind(trial.params, vI.trajectory)
-  return(vI.trajectory)
+  if (epidemic.index[1] > 0) {
+    time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+    vI.trajectory <- combine_time_records(time.records.a)
+    vI.trajectory <- cbind(trial.params, vI.trajectory)
+    vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
+    return(vI.trajectory)
+  }
 })
-colnames(trajectories) <- c("rnott", "pop.size", "iter", "vtime", "vI")
+
 
 # plot a sample 
 #random.iter <- sample(x = seq(1:1000), size = 50)
@@ -132,7 +134,7 @@ cum.strains.master %>% group_by(rnott, pop.size, shifted.time) %>%
   filter(rnott %in% desired.rnotts) -> cum.strains.avg
 
 # 4. Trajectories Plots of Entropy - should I align these? 
-metrics.trajectory <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+metrics.trajectory <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
@@ -154,26 +156,41 @@ metrics.trajectory %>% group_by(rnott, pop.size, shifted.time) %>%
             avg.diversity = mean(diversity),
             sd.diversity = sd(diversity),
             avg.strains = mean(cir.strains),
-            sd.strains = sd(cir.strains)) %>%
-  tidyr::gather(metric, value, avg.entropy, avg.diversity, avg.strains, 
-                sd.entropy, sd.diversity, sd.strains) %>%
-  #tidyr::gather(sd.metric, sd.value, sd.entropy, sd.diversity, sd.strains) %>%
-  filter(metric %in% c("avg.strains", "sd.strains")) %>%
-  spread(metric, value) -> strains.avg #%>%
+            sd.strains = sd(cir.strains)) %>% 
+  filter(pop.size == 1000) %>%
+  gather(metric, value, 4:9) %>%
+  filter(metric %in% c("avg.diversity", "sd.diversity")) %>%
+  spread(metric, value)  -> avg.diversity
   #filter(rnott %in% desired.rnotts) 
-
-trajectory.entropy <- ggplot(entropy.avg, aes(x = shifted.time, y = average.value)) + 
-  geom_ribbon(aes(ymin = (average.value - sd.value), ymax = (average.value + sd.value)), 
-              alpha = .1, fill="steelblue2", color="steelblue2") +
-  geom_line(size = 2, color = "black") + facet_grid(pop.size ~ rnott, scales = "free") 
 
 trajectory.strains <- ggplot(strains.avg, aes(x = shifted.time, y = avg.strains)) + 
   geom_ribbon(aes(ymin = (avg.strains - sd.strains), ymax = (avg.strains + sd.strains)), 
-              alpha = .4, fill="steelblue2", color="steelblue2") +
-  geom_line(size = 2, color = "black") + facet_grid(pop.size ~ rnott, scales = "free") +
-  geom_vline(xintercept = 0, color = "orange", lty = 2, size = .75)
+              alpha = .3, fill="steelblue2", color="steelblue2") +
+  geom_line(size = 1.5, color = "steelblue2") + facet_wrap(~ rnott, nrow = 1) +
+  geom_vline(xintercept = 0, color = "purple", size = 1, lty = 2) +
+  theme(strip.background = element_blank()) 
+  
+
+trajectory.entropy <- ggplot(avg.entropy, aes(x = shifted.time, y = avg.entropy)) + 
+  geom_ribbon(aes(ymin = (avg.entropy - sd.entropy), ymax = (avg.entropy + sd.entropy)), 
+              alpha = .4, fill="indianred1", color="indianred1")  +
+  geom_line(size = 1.5, color = "indianred1") + facet_wrap(~ rnott, nrow = 1) +
+  geom_vline(xintercept = 0, color = "purple", size = 1, lty = 2) +
+  theme(strip.background = element_blank()) 
 
 
+trajectory.diversity <- ggplot(avg.diversity, aes(x = shifted.time, y = avg.diversity)) + 
+  geom_ribbon(aes(ymin = (avg.diversity - sd.diversity), ymax = (avg.diversity + sd.diversity)), 
+              alpha = .4, fill="darkorange2", color="darkorange2")  +
+  geom_line(size = 1.5, color = "darkorange2") + facet_wrap(~ rnott, nrow = 1) +
+  geom_vline(xintercept = 0, color = "purple", size = 1, lty = 2) +
+  theme(strip.background = element_blank()) 
+
+
+combined.trajectories <- plot_grid(trajectory.strains, trajectory.entropy, trajectory.diversity, nrow = 3) 
+save_plot(filename = paste0(fig_path, "combined.trajectories.pdf"), combined.trajectories,
+          base_height = 8, base_aspect_ratio = 1.9)
+combined.trajectories
 # 5. Trajectories of Derivatives   
 ### Need to take the derivative of all first before averaging 
 metrics.trajectory %>% group_by(rnott, pop.size, iter) %>%

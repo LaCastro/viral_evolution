@@ -20,9 +20,12 @@ N = c(100, 1000, 10000)
 r0_seq = c(seq(0.9, 2, .2), seq(2,5, 0.5))
 
 
-file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
+file.list <- get_vec_of_files(dir_path = data_path, type = "strain", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
-data.files.trial <- data.frame(cbind(combos, file.list))
+data.files.strain <- data.frame(cbind(combos, file.list))
+
+data.files <- left_join(data.files.trial, data.files.strain, by = "combos")
+colnames(data.files) <- c("combos", "file.trial", "epidemic.trials", "file.strain")
 
 epidemic.trials <- set_epidemic_criteria(time.records, threshold.prev = .025, threshold.prop = .25)
 data.files.trial$epidemic.trials <- epidemic.trials
@@ -191,7 +194,53 @@ data.files.strain <- data.frame(cbind(combos, file.list))
 ## Sampling 20/100 strain records
 sample = 31
 
-long.strains.master <- adply(.data = data.files.strain, .margins = 1,.id = NULL, .expand = FALSE, function(x) {
+long.strains.absolute.master <- adply(.data = data.files, .margins = 1,.id = NULL, .expand = FALSE, function(x) {
+  
+  # first load the trajectories
+  load(as.character(x$file.trial))
+  trial.params <- get_params(x)
+  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  if (epidemic.index[1] > 0) {
+    time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+    vI.trajectory <- combine_time_records(time.records.a)
+    vI.trajectory <- cbind(trial.params, vI.trajectory)
+    vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
+    
+    # Strain part 
+    load(as.character(x$file.strain))
+    trial.params <- get_params(x)
+    long.strain.df <- adply(.data = epidemic.index, .margins = 1, function(x) {
+      long.strains.m <- long.strains(x, strain.records)
+    })
+    long.strain.df <- cbind(trial.params, long.strain.df)
+    head(long.strain.df)
+    
+    strain.spread <- spread(long.strain.df, key = strain.name, value = frequency)
+    vI <- vI.trajectory$vI
+    select(strain.spread,  6:ncol(strain.spread)) * vI -> strain.absolute.infect 
+    strain.absolute.infect <- cbind(strain.spread[,1:5], vI, strain.absolute.infect)
+    gather(strain.absolute.infect, strain.name,
+           num.infected, 7:ncol(strain.absolute.infect)) -> strain.absolute.long
+    return(strain.absolute.long)
+    }
+  })
+sample <- sample(1:100, 6)
+
+long.strains.absolute.master %>% 
+  filter(pop.size == 1000 & rnott == 1.3 & iter %in% sample) -> long.strains.absolute.sample
+
+ci.pop.1000 <- ggplot2::ggplot(data = long.strains.absolute.sample,
+                               aes(x = vtime, y = num.infected, fill = strain.name)) +
+  facet_wrap(~iter, nrow = 3) +
+  geom_area(color = "black", size = .2, alpha = .3) + guides(fill = FALSE) +
+  #geom_vline(data = time.max.sample, aes(xintercept = jitter(value, .25), color = metric), size = 1.25, alpha = .85) +
+  #scale_color_manual(values = c("black", "mediumblue", "purple"), guide = FALSE) + 
+  #theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
+  labs(x = "Time", y = "Num.Infected")
+
+
+# Previous Function that just took 
+long.strains.master <- adply(.data = data.files, .margins = 1,.id = NULL, .expand = FALSE, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   long.strain.df <- adply(.data = sample, .margins = 1, function(x) {
@@ -204,9 +253,8 @@ long.strains.master <- adply(.data = data.files.strain, .margins = 1,.id = NULL,
 
 long.strains.master %>% filter(pop.size == 1000) -> long.strains.sample
 
-# Clonal Interference Graph 
+# Clonal Interference Graph - Frequencies 
 #time.max.sample %>% gather(metric, value, 4:6) -> time.max.sample.long
-
 
 ci.pop.1000 <- ggplot2::ggplot(data = long.strains.sample, aes(x = time, y = frequency, fill = strain.name)) +
   facet_wrap(~rnott, nrow = 3) +
@@ -218,7 +266,6 @@ ci.pop.1000 <- ggplot2::ggplot(data = long.strains.sample, aes(x = time, y = fre
 
 diversity.plot <- ggplot(trajectories.sample, aes(x = vtime, y = diversity)) + facet_wrap(~rnott, nrow = 3) +
   geom_line(color = "black", size = 2)
-
 entropy.plot <- ggplot(trajectories.sample, aes(x = vtime, y = entropy)) + facet_wrap(~rnott, nrow = 3) +
   geom_line(color = "blue4", size = 2)
 

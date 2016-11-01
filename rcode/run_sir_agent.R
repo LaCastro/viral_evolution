@@ -51,8 +51,8 @@ SIRfunc=function(t, x, vparameters){
 ##################################################################################
 N = 10000# population size 
 I_0 = 100     # number intially infected people in the population
-R_0 = 0      # assume no one has recovered at first
-delta_t = 1      # nominal time step
+R_0 = 0     # assume no one has recovered at first
+delta_t = .01      # nominal time step
 tbeg  = 1           # begin day
 tend  = 200 # end day
 gamma = 1/3  
