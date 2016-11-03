@@ -7,7 +7,7 @@ rm(list=ls())
 if(grepl('meyerslab', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/viral_evolution_repo/rcode/')
 if(grepl('laurencastro', Sys.info()['login'])) setwd('~/Documents/projects/viral_evolution/rcode/')
 
-sapply(c('analyze_saved_sims.R', 'plotting_functions.R'), source)
+sapply(c('analyze_saved_sims.R', 'evo_functions.R', 'plotting_functions.R', 'sir_mutation_func.R'), source)
 
 
 library(deSolve)
@@ -20,6 +20,7 @@ library(plyr)
 library(dplyr)
 
 fig_path = "~/Documents/projects/viral_evolution/viral_evolution_repo/figs/"
+if(grepl('meyerslab', Sys.info()['login'])) data_path = ('~/Documents/projects/viral_evolution/viral_evolution_repo/data/')
 
 ##################################################################################
 # Set up initial functions to designate parameters and multiple runs 
@@ -36,6 +37,7 @@ epi_mut_params <- function(N = 1000,
                            gamma = 1/3,
                            R0 = 1.5, 
                            beta = R0*gamma, 
+                           contact.per.day = 4,
                            seq_len = 100,
                            alphabet = c(1, 2, 3, 4),
                            year_mut_rate = 1.8*10^-2, #1.8*10^-3
@@ -46,11 +48,11 @@ return(as.list(environment()))
 ##################################################################################
 ## Analysis 
 ##################################################################################
-nrealisations = 1000
+nrealisations = 50
 
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 2, .1), seq(2.5, 5, 0.5))
-r0_seq = c(0.9, 1, 1.1)
+r0_seq = c(seq(0.9, 2, .1))
+#r0_seq = c(0.9, 1, 1.1)
 
 if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/trial1000/"
 if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
@@ -59,21 +61,26 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,
-                                     params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = 1, tend=250))
-    filename.time <- paste0(data_path, "trial/trial_rnott", r0_seq[r0], "_N", N[size])
+                                     params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = .1, tend=250))
+    filename.time <- paste0(data_path, "data.smalltimestep/trial/trial_rnott", r0_seq[r0], "_N", N[size])
     time.records <- time_records_all(trial)
     save(time.records, file = paste0(filename.time, ".RData"))
     
-    #filename.strain <- paste0(data_path,"/strain/strain_rnott", r0_seq[r0], "_N", N[size])
-    #strain.records <- strain_freq_all(trial)
-    #save(strain.records, file = paste0(filename.strain, ".RData"))
+    filename.strain <- paste0(data_path,"data.smalltimestep/strain/strain_rnott", r0_seq[r0], "_N", N[size])
+    strain.records <- strain_freq_all(trial)
+    save(strain.records, file = paste0(filename.strain, ".RData"))
   }
 }
 
-trialat2.bigtimestep <- run_mutate_branches_inc(num_reps = 25, params = 
-                                      epi_mut_params(N=10000, R0 = 2, delta_t = 1, tend = 120, year_mut_rate = 0))
 
-epi_size_all(trialat2.bigtimestep)
+##### 
+# When sampling 
+
+newmodel <- run_mutate_branches_inc(num_reps = 100, params = 
+                                      epi_mut_params(N=1000, R0 = 1.5, delta_t = 1, tend = 120, year_mut_rate = 0))
+
+
+epi_size_all(newmodel)
 head(trialat2.bigtimestep[[3]]$time_record)
 beta
 hist(trialat2.bigtimestep[[3]]$time_record$new.infected) 

@@ -5,8 +5,10 @@ sir_mutation_agent = function(params) {
     
     ########################################################################
     # beta is the number of contacts sufficient to transmit infection per unit time
-    beta = R0*gamma 
-    recover.prob = (1-exp(-gamma*delta_t))
+    beta = R0*gamma*delta_t
+    infectivity = beta/contact.per.day # contact rate already in terms of time step
+    
+    recover.prob = (1-exp(-gamma*delta_t)) # Probability of Recovery given still infectious
     ########################################################################
     # set up the state vector of the population
     # vstate = 0   means susceptible
@@ -38,17 +40,17 @@ sir_mutation_agent = function(params) {
     
     # Time Recrod
     
-    time_record = data.frame(matrix(data=0, ncol = 10))
-    colnames(time_record) = c('vS', 'vI', 'new.infected', 'recovered', 'cir.strains', 'cum.strains',
+    time_record = data.frame(matrix(data=0, ncol = 8))
+    colnames(time_record) = c('vS', 'vI', 'cir.strains', 'cum.strains',
                               'diverge', 'diversity', 'entropy', 'num.mutations')
     time_record$vS = S
     time_record$vI = I
     time_record$cir.strains=1
     time_record$cum.strains=1
-   
+    
     while (t<tend&I>0) { 
       # continue the simulation until we have no more infectious people or t>=tend
-    
+      
       # Not Sure yet if I still need this
       deltat=delta_t
       
@@ -114,102 +116,127 @@ sir_mutation_agent = function(params) {
       ############################################################
       
       # sample Poisson random numbers of infected people contacted by each person
-      avg.num.infected.people.contacted = beta*I*deltat/N
-      vnum.infected.people.contacted = rpois(N,avg.num.infected.people.contacted) 
+      contacts.by.infected = rpois(n = current.inf.index, lambda = contact.rate)
+      
+      vnewstate = vstate
+      
+      for (i in 1:length(current.inf.index)) {
+        responsible.ind = current.inf.index[i]
+        infected.contacts = sample(c(1:(responsible.ind-1), (responsible.ind+1):N), contacts.by.infected[i])
+        
+        contact.disease.state = vstate[infected.contacts]
+        contact.strian.state = strain.state[infected.contacts]
+        contact.prob = runif(contacts.by.infected[i])
+        
+        vnewstate[contact.disease.state == 0 & contact.prob < infectivity] = 1
+        strain.state[contact.disease.state == 0 & contact.prob < infectivity] = strain.state[responsible.ind]
+      }
+      
+      
+      #contact.strain.state = new.s.state
+      #vnewstate[vstate==0&vprob>infectivity] = 1 
+      #  responsible.individual = sample(current.inf.index, 1)
+      #  responsible.strain <- new.s.state[responsible.individual]
+      #  new.s.state[new.infects.index[k]] <- responsible.strain
+      #}
+      
+      #avg.num.infected.people.contacted = 1-exp(-beta*I/N*deltat)
+      #vnum.infected.people.contacted = rpois(N,avg.num.infected.people.contacted)
       
       vprob = runif(N)   # sample uniform random numbers
-      vnewstate = vstate # copy the state vector to a temporary vector used for calculations
-      new.s.state = strain.state # copy the strain vector to a temporary vector used for calculations
+      #vnewstate = vstate # copy the state vector to a temporary vector used for calculations
+      #new.s.state = strain.state # copy the strain vector to a temporary vector used for calculations
       
       # Infected people recover if the sampled uniform random
       # number is less than the recovery probability
       vnewstate[vstate==1&vprob<recover.prob] = 2   
       recovered_ind = which(vstate==1&vprob<recover.prob)
       num.recovered = length(recovered_ind)
+      strain.state[recovered_ind] = 0
       
       # If a susceptible contacted at least one infective, they are infected
-      vnewstate[vstate==0&vnum.infected.people.contacted>0] = 1 
-      new.infects.index = which(vstate==0&vnum.infected.people.contacted>0)
-      num.new.infects = length(new.infects.index)
-      infects.per.person = num.new.infects/I
-     
+      #vnewstate[vstate==0&vnum.infected.people.contacted>0] = 1 
+      #new.infects.index = which(vstate==0&vnum.infected.people.contacted>0)
+      #num.new.infects = length(new.infects.index)
+      #infects.per.person = num.new.infects/I
+      
       
       vstate = vnewstate # update the state vector
       
-      if (num.new.infects > 0) {
-        # Assign strains to newly infected:
-        if (I == 1) { 
-          
-          # if only one strain available all new strains get that one
-          new.s.state[new.infects.index] <- new.s.state[current.inf.index]
-        } else { 
-           # if more than one present infected, then sample 
-          for(k in 1:num.new.infects) {
+      #if (num.new.infects > 0) {
+      #  # Assign strains to newly infected:
+      # if (I == 1) { 
+      
+      # if only one strain available all new strains get that one
+      #    new.s.state[new.infects.index] <- new.s.state[current.inf.index]
+      #  } else { 
+      # if more than one present infected, then sample 
+      #   for(k in 1:num.new.infects) {
+      
+      #      responsible.individual = sample(current.inf.index, 1)
+      #      responsible.strain <- new.s.state[responsible.individual]
+      #      new.s.state[new.infects.index[k]] <- responsible.strain
+      #    }
+      #  }
+      #} 
+      
+      ## Recovered Individual Strains are a dead-end
+      #new.s.state[recovered_ind] <- 0
+      #strain.state <- new.s.state
+      
+      
+      # update I for while condition and frequency calculations 
+      I = length(vstate[vstate==1])
+      sstate  = length(which(strain.state > 0))
+      
+      if (I == 0) {
+        return
+      } else {
+        ## Add any new strains to population and calculate overall frequencies
+        unique.strains <- unique(strain.state[strain.state > 0])
         
-            responsible.individual = sample(current.inf.index, 1)
-            responsible.strain <- new.s.state[responsible.individual]
-            new.s.state[new.infects.index[k]] <- responsible.strain
-          }
+        current.freq =  data.frame(aaply(.data = unique.strains, .margins = 1, function(x) 
+          freq = length(which(strain.state == x))/length(which(strain.state > 0))))
+        colnames(current.freq) = "frequency"
+        current.freq = cbind(unique.strains, current.freq)
+        
+        for (n in 1:nrow(current.freq)) {
+          # Add frequencies to population frequency storage 
+          population.frequency[length(vtime)+1, current.freq[n,1]] = current.freq$frequency[n]
         }
-      } 
-    
-    ## Recovered Individual Strains are a dead-end
-    new.s.state[recovered_ind] <- 0
-    strain.state <- new.s.state
-    
-    
-    # update I for while condition and frequency calculations 
-    I = length(vstate[vstate==1])
-    sstate  = length(which(strain.state > 0))
-    
-    if (I == 0) {
-      return
-    } else {
-      ## Add any new strains to population and calculate overall frequencies
-      unique.strains <- unique(strain.state[strain.state > 0])
-      
-      current.freq =  data.frame(aaply(.data = unique.strains, .margins = 1, function(x) 
-        freq = length(which(strain.state == x))/length(which(strain.state > 0))))
-      colnames(current.freq) = "frequency"
-      current.freq = cbind(unique.strains, current.freq)
-    
-      for (n in 1:nrow(current.freq)) {
-        # Add frequencies to population frequency storage 
-        population.frequency[length(vtime)+1, current.freq[n,1]] = current.freq$frequency[n]
+        
+        #################### Book-Keeping After Replication
+        S = length(vstate[vstate==0]) 
+        
+        # Calculate mutation metrics 
+        current.haplotypes <- get_current(population.strains, population.frequency, timestep =  length(vtime)+1)
+        circulating.strains <- length(current.haplotypes$hindex)
+        diversity.time  =  get_diversity(current.haplotypes)
+        divergence.time  = get_divergence(current.haplotypes, base.haplotype) 
+        entropy.time = get_s.entropy(current.haplotypes)
+        
+        cum.strains = length(population.strains)
+        
+        time_record <- rbind(time_record, c(S,I, circulating.strains, cum.strains,  
+                                            divergence.time, diversity.time, entropy.time,
+                                            num.mutations))
+        vtime = append(vtime, t)
+        t = t + deltat 
+        #print(paste0("Finished Replication", t-1))
       }
-      
-      #################### Book-Keeping After Replication
-      S = length(vstate[vstate==0]) 
-      
-      # Calculate mutation metrics 
-      current.haplotypes <- get_current(population.strains, population.frequency, timestep =  length(vtime)+1)
-      circulating.strains <- length(current.haplotypes$hindex)
-      diversity.time  =  get_diversity(current.haplotypes)
-      divergence.time  = get_divergence(current.haplotypes, base.haplotype) 
-      entropy.time = get_s.entropy(current.haplotypes)
-      
-      cum.strains = length(population.strains)
-      
-      time_record <- rbind(time_record, c(S,I, infects.per.person, num.recovered, circulating.strains, cum.strains,  
-                                          divergence.time, diversity.time, entropy.time,
-                                          num.mutations))
-      vtime = append(vtime, t)
-      t = t + deltat 
-      #print(paste0("Finished Replication", t-1))
-    }
-  } 
-  
-  # Calculate final size of each epidemic 
-  final = 0
-  if (length(time_record$vS)>0) final = 1-min(time_record$vS)/N
-  
-  # Naming all the population strains for easier analsis 
-  names(population.strains) <- paste("s", seq_along(population.strains), sep = ".") 
-  colnames(population.frequency) <- paste("s", seq_along(population.frequency), sep = ".")
-  time_record <- cbind(as.data.frame(vtime), time_record)
-  
-  return(list(time_record = time_record, final_size = final, strain.freq = population.frequency,
-              population.strains = population.strains))
-})
-  }
+    } 
+    
+    # Calculate final size of each epidemic 
+    final = 0
+    if (length(time_record$vS)>0) final = 1-min(time_record$vS)/N
+    
+    # Naming all the population strains for easier analsis 
+    names(population.strains) <- paste("s", seq_along(population.strains), sep = ".") 
+    colnames(population.frequency) <- paste("s", seq_along(population.frequency), sep = ".")
+    time_record <- cbind(as.data.frame(vtime), time_record)
+    
+    return(list(time_record = time_record, final_size = final, strain.freq = population.frequency,
+                population.strains = population.strains))
+  })
+}
 

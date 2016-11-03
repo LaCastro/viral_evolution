@@ -51,26 +51,52 @@ SIRfunc=function(t, x, vparameters){
 # Set up initial conditions
 ##################################################################################
 N = 10000    # population size
-I_0 = 10     # number intially infected people in the population
+I_0 = 100     # number intially infected people in the population
 S_0 = N-I_0
 R_0 = 0      # assume no one has recovered at first
 
-delta_t = 0.1       # nominal time step
+delta_t = .1       # nominal time step
 tbeg  = 0           # begin day
 tend  = 120         # end day
-gamma = 1/3         # recovery period of influenza in days^{-1}
-R0    = 2     # R0 of a hypothetical strain of pandemic influenza
+gamma = 1/3       # recovery period of influenza in days^{-1}
+R0    = 1.5    # R0 of a hypothetical strain of pandemic influenza
 beta = R0*gamma     # "reverse engineer" beta from R0 and gamma
 
 ##################################################################################
 # first simulate the model with deterministic ODE's, so that we have something
 # to compare our stochastic simulation to.
 ##################################################################################
-vt = seq(tbeg,tend,delta_t)
-vparameters = c(gamma=gamma,beta=beta)
-inits = c(S=S_0,I=I_0,R=R_0)
 
-sirmodel = as.data.frame(lsoda(inits, vt, SIRfunc, vparameters))
+r0_seq = seq(.9, 2, .01)
+
+deterministic.final.size = adply(.data = r0_seq, .margins = 1, .id = NULL, function(x) {
+  R0 = x 
+  beta = R0*gamma     # "reverse engineer" beta from R0 and gamma
+  vt = seq(tbeg,tend,delta_t)
+  vparameters = c(gamma=gamma,beta=beta)
+  inits = c(S=S_0,I=I_0,R=R_0)
+  sirmodel = as.data.frame(lsoda(inits, vt, SIRfunc, vparameters))
+  final.size = max(sirmodel$R)/N
+  deterministic.data = data.frame(cbind(R0, final.size))
+})
+
+
+diff = diff(sirmodel$I) 
+plot(log(sirmodel$I), xlim = c(0,40))
+
+data = data.frame(cbind(sirmodel$time, sirmodel$I))
+data = data[1:40,]
+data %>% mutate(log = log(X2))-> data
+head(data)
+
+model1 = lm(X1~log, data = data)
+summary(model1): # coefficient is 10.8
+gplot(data, aes(x = X1, y = X2)) + geom_point() + scale_y_log10()
+
+
+
+deterministic.growth = diff/vI
+
 
 ##################################################################################
 # now plot the results of the deterministic model
@@ -198,6 +224,8 @@ for (iter in 1:nrealisations) {
   myagent = SIR_agent_erlang(N,sum(I_0),S_0,gamma,k,R0,tbeg,tend,delta_t)
   vfinal = append(vfinal,myagent$final_size) 
 }
+
+
 vfinal.moved = vfinal
 
 vfinal.original = numeric(0)

@@ -25,12 +25,12 @@ if(grepl('meyerslab', Sys.info()['login'])) fig_path = "~/Documents/projects/vir
 if(grepl('laurencastro', Sys.info()['login'])) fig_path <- "~/Documents/projects/viral_evolution/figs/"
 
 # Data Path 
-if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/"
+if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/data.smalltimestep/"
 if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
 
 # Reading in files from saved data runs for chosen R0s and popsizes
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 1.9, .2))
+r0_seq = c(seq(0.9, 2, .1))
 
 file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
@@ -280,7 +280,7 @@ final.infected.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expa
   return(final.infected.trial)
 })
 
-final.infected.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+final.infected.master <-  adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
  # epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
@@ -290,11 +290,23 @@ final.infected.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expa
 })
 colnames(final.infected.master)[3] <- "prop.infected"
 
-ggplot(final.infected.master, aes(factor(rnott), prop.infected)) + geom_jitter(alpha = .5) + 
-  facet_wrap(~pop.size, nrow =1 ) + geom_hline(yintercept = .25, color = "orange")
+ggplot(final.infected.master, aes(prop.infected)) + geom_histogram() + 
+  facet_grid(rnott~pop.size)
+  
+r0_seq = c(0.9, 1, 1.1, 1.5, 1.8)
+
+join(x = final.infected.master, deterministic.final.size) -> final.size.master.bigtime
+
+final.size.master.bigtime %>% filter(rnott %in% r0_seq) %>% 
+  ggplot(aes(prop.infected)) + geom_histogram(bins = 50) + 
+  facet_grid(rnott~pop.size) + geom_vline(aes(xintercept = final.size), color = "purple")
+
+deterministic.final.size %>% filter(rnott %in% r0_seq) %>%
+  
+  ggplot()+geom_vline(xintercept = final.size) + final.size.smalltime
 
 # 3. Maximum number of people infected at a single time
-maximum.prevalance <- adply(.data = data.files, .margins = 1, .id= NULL, .expand = F, function(x) {
+maximum.prevalance <- adply(.data = data.files.trial, .margins = 1, .id= NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   max.prev <- data.frame(all_max_infected(x = time.records))
@@ -303,16 +315,20 @@ maximum.prevalance <- adply(.data = data.files, .margins = 1, .id= NULL, .expand
 })
 colnames(maximum.prevalance)[3] <- "max.prev"
 
-ggplot(data = maximum.prevalance, aes(max.prev))+geom_histogram(bins = 20) + 
+ggplot(data = maximum.prevalance, aes(max.prev))+geom_histogram(bins = 50) + 
   facet_grid(rnott~pop.size, scales = "free_x") 
 
 # 3. Comparing the relationship between proportion and maximum prevalance-used to help determine threshold 
 meta.data.master <- cbind(final.infected.master, maximum.prevalance[,3]); colnames(meta.data.master)[4] <- "max.prev"
 meta.data.master %>% filter(rnott < 1.3) -> meta.data.r0
 
-
+meta.data.master = join(meta.data.master, deterministic.final.size)
 # Trying Different Relationships 
-ggplot(data = meta.data.master, aes(x = ratio, y = prop.infected)) + geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x")
+ggplot(data = meta.data.master, aes(x = max.prev, y = prop.infected)) + 
+  geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x") +
+  geom_hline(aes(yintercept = final.size), color = "purple") -> epidemic.criteria.smalltime.step
+
+save_plot(filename = paste0(fig_path, "epidemic.criteria.smalltime.pdf"), epidemic.criteria.smalltime.step, base_height = 8, base_aspect_ratio = 1.5)
 ggplot(data = meta.data.prop25, aes(x = days, y = prop.infected)) + geom_jitter(alpha = .5)+facet_grid(rnott~pop.size, scales = "free_x")
 
 head(meta.data.master)
