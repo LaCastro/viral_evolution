@@ -163,11 +163,13 @@ sir_mutation_agent = function(params) {
       #vnum.infected.people.contacted = rpois(N,avg.num.infected.people.contacted)
       
       vprob = runif(N)   # sample uniform random numbers
+      
+      
       #vnewstate = vstate # copy the state vector to a temporary vector used for calculations
       #new.s.state = strain.state # copy the strain vector to a temporary vector used for calculations
-      
       # Infected people recover if the sampled uniform random
       # number is less than the recovery probability
+      
       vnewstate[vstate==1&vprob<recover.prob] = 2   
       recovered_ind = which(vstate==1&vprob<recover.prob)
       num.recovered = length(recovered_ind)
