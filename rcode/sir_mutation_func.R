@@ -1,3 +1,18 @@
+#N = 1000
+#I_0 = .01*N
+#S_0 = N-I_0
+#delta_t = 1 
+#tbeg = 1
+#tend = 250
+#gamma = 1/3
+#R0 = 1.5
+#beta = R0*gamma
+#contact.per.day = 4
+#seq_len = 100
+#alphabet = c(1, 2, 3, 4)
+#year_mut_rate = 1.8*10^-2 #1.8*10^-3
+#mut_rate = year_mut_rate / (365 / delta_t) 
+
 ##################################################################################
 ##################################################################################
 sir_mutation_agent = function(params) {
@@ -6,7 +21,7 @@ sir_mutation_agent = function(params) {
     ########################################################################
     # beta is the number of contacts sufficient to transmit infection per unit time
     beta = R0*gamma*delta_t
-    infectivity = beta/contact.per.day # contact rate already in terms of time step
+    infectivity = beta/(contact.per.day*delta_t) # contact rate already in terms of time step
     
     recover.prob = (1-exp(-gamma*delta_t)) # Probability of Recovery given still infectious
     ########################################################################
@@ -57,14 +72,15 @@ sir_mutation_agent = function(params) {
       #if (delta_t==0){ # this is the calculation of a dynamic time step
       #  deltat = 1/(beta*I*S/N + gamma*I)
       #}
-      
-      ############################################################
-      # Mutation 
-      ############################################################
       # Count number of individuals in each state 
       current.inf.index = which(vstate == 1) # Current Infection Index
       I = length(current.inf.index) 
       
+      
+      ############################################################
+      # Mutation 
+      ############################################################
+ 
       # Expected number of mutations Assuming one sequence per individual
       mean.mutation <- mut_rate*seq_len*I
       num.mutations <- rpois(1, mean.mutation)
@@ -116,7 +132,7 @@ sir_mutation_agent = function(params) {
       ############################################################
       
       # sample Poisson random numbers of infected people contacted by each person
-      contacts.by.infected = rpois(n = current.inf.index, lambda = contact.rate)
+      contacts.by.infected = rpois(n = current.inf.index, lambda = contact.per.day)
       
       vnewstate = vstate
       
@@ -128,8 +144,11 @@ sir_mutation_agent = function(params) {
         contact.strian.state = strain.state[infected.contacts]
         contact.prob = runif(contacts.by.infected[i])
         
-        vnewstate[contact.disease.state == 0 & contact.prob < infectivity] = 1
-        strain.state[contact.disease.state == 0 & contact.prob < infectivity] = strain.state[responsible.ind]
+        new.infected =  which(contact.disease.state == 0 & contact.prob < infectivity)
+        
+        vnewstate[infected.contacts[new.infected]] = 1
+       
+        strain.state[infected.contacts[new.infected]] = strain.state[responsible.ind]
       }
       
       
