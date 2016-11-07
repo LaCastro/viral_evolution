@@ -1,11 +1,11 @@
 #N = 1000
 #I_0 = .01*N
 #S_0 = N-I_0
-#delta_t = 1 
+#delta_t = .1 
 #tbeg = 1
 #tend = 250
 #gamma = 1/3
-#R0 = 1.5
+#R0 = 0.85
 #beta = R0*gamma
 #contact.per.day = 4
 #seq_len = 100
@@ -132,7 +132,7 @@ sir_mutation_agent = function(params) {
       ############################################################
       
       # sample Poisson random numbers of infected people contacted by each person
-      contacts.by.infected = rpois(n = current.inf.index, lambda = contact.per.day)
+      contacts.by.infected = rpois(n = current.inf.index, lambda = contact.per.day*delta_t)
       
       vnewstate = vstate
       

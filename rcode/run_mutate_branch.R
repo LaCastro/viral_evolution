@@ -76,8 +76,8 @@ for (size in 1:length(N)) {
 ##### 
 # When sampling 
 
-newmodel <- run_mutate_branches_inc(num_reps = 10, params = 
-                                      epi_mut_params(N=1000, contact.per.day = 4, R0 = 1.5, delta_t = .05, tend = 120, year_mut_rate = 0))
+newmodel <- run_mutate_branches_inc(num_reps = 100, params = 
+                                      epi_mut_params(N=1000, contact.per.day = 4, R0 = 1.5, delta_t = 1, tend = 120, year_mut_rate = 0))
 
 
 f = summary(epi_size_all(newmodel)$V1)

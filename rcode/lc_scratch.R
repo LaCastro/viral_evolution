@@ -42,23 +42,33 @@ epidemic.trials <- set_epidemic_criteria(data.files.trial, threshold.prev = .025
 data.files.trial$epidemic.trials <- epidemic.trials
 
 
+f = summary(epi_size_all(newmodel)$V1)
+r0 = -log(1-f)/f
+
+final.infected.master %>% 
+  mutate(effective.r0 = -log(1-prop.infected)/prop.infected) -> final.infected.calculatedr0
+  
 #########################################################
 # TIME SERIES ANALYSIS
 #########################################################
 
 # 1. Plotting infected time-series/genetic metrics 
-trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
-  load(as.character(x$file.list))
-  trial.params <- get_params(x)
-  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
-  if (epidemic.index[1] > 0) {
-    time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
-    vI.trajectory <- combine_time_records(time.records.a)
-    vI.trajectory <- cbind(trial.params, vI.trajectory)
-    vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
-    return(vI.trajectory)
-  }
-})
+  trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
+    load(as.character(x$file.list))
+    trial.params <- get_params(x)
+    epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+    if (epidemic.index[1] > 0) {
+      time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+      vI.trajectory <- combine_time_records(time.records.a)
+      vI.trajectory <- cbind(trial.params, vI.trajectory)
+      vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
+      return(vI.trajectory)
+    }
+  })
+
+
+
+
 
 
 # plot a sample 
