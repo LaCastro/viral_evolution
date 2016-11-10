@@ -53,6 +53,22 @@ final.infected.master %>%
 #########################################################
 
 # 1. Plotting infected time-series/genetic metrics 
+<<<<<<< HEAD
+trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.list))
+  trial.params <- get_params(x)
+#  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  if (epidemic.index[1] > 0) {
+    #time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+    time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+    
+    vI.trajectory <- combine_time_records(time.records.a)
+    vI.trajectory <- cbind(trial.params, vI.trajectory)
+    vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
+    return(vI.trajectory)
+  }
+})
+=======
   trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
     load(as.character(x$file.list))
     trial.params <- get_params(x)
@@ -75,6 +91,7 @@ metrics.trajectory %>%
   mutate(day.time = shifted.time/10) -> trajectories.day
 
 
+<<<<<<< HEAD
 ggplot(data = day.steps, aes(x =day.time, y = vI)) + # , group = iter, color = iter)) +
   geom_smooth()+guides(color = FALSE) +
   facet_wrap(~rnott, scales = "free") +
@@ -82,6 +99,9 @@ ggplot(data = day.steps, aes(x =day.time, y = vI)) + # , group = iter, color = i
   #scale_x_continuous(aes(breaks = c(min(shifted.time), max(shifted.time), 100), 
                          #labels = shifted.time/10)) +
   labs(x = "Shifted Time (days)" ) 
+=======
+>>>>>>> origin/master
+>>>>>>> origin/master
 
 
 average.vi <- group_by(trajectory.master, rnott, pop.size, shifted.time) %>%
