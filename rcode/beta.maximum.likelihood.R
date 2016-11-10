@@ -58,13 +58,14 @@ beta.hat.estimate <- daply(.data = newmodel, .variables = "iter", function(x) {
 })
 
 
-trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
-  load(as.character(x$file.list))
+trajectories <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+  load(as.character(x$file.trial))
   trial.params <- get_params(x)
   #epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
   #if (epidemic.index[1] > 0) {
   #time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
-  vI.trajectory <- combine_time_records(time.records)
+  time.records.a <- align_time_series_all(time.records = time.records)
+  vI.trajectory <- combine_time_records(time.records.a)
   vI.trajectory <- cbind(trial.params, vI.trajectory)
   #vI.trajectory$iter = epidemic.index[vI.trajectory$iter]
   return(vI.trajectory)
@@ -115,18 +116,40 @@ beta.hat.master = beta.hat.master[, -2]
  
 # Graphs based on final proportion
 
-ggplot(final.size.test, aes(x = as.factor(rnott), y = effective.r0, 
-                            color = as.factor(pop.size))) +
+final.size.test = join(final.infected.calculatedr0, deterministic.final.size, by = "rnott")
+colnames(deterministic.final.size)[1] = "rnott"
+
+final.prop <- ggplot(final.size.test, aes(x = as.factor(rnott), y = effective.r0, 
+                            fill = as.factor(pop.size))) +
   geom_boxplot() + 
   scale_y_continuous(limits = c(0.9, 4), breaks = seq(0.9, 4, .2)) +
-  
-  ggplot(final.size.test, aes(prop.infected, fill = as.factor(pop.size)))+
-  geom_density(alpha = .5)+facet_wrap(~rnott) + 
-  geom_vline(aes(xintercept = final.size))
+  scale_fill_discrete(name="Population Size",
+                      breaks=c("beta.hat.100", "beta.hat.1000", "beta.hat.10000"),
+                      labels=c("100", "1000", "10000")) +
+  labs(x = "Simulation Beta/Gamma", y = "effective.rnott", title = "Calculated From Final Proportion")
+ 
+save_plot(filename = paste0(fig_path, "effective.rnott.pdf"), final.prop, base_aspect_ratio = 1.5)
 
 
-ggplot(beta.hat.master, aes(x = as.factor(rnott), y = rnott.hat, 
-                            color = as.factor(beta.hat))) +
+final.size.test$final.size[which(final.size.test$rnott == 1.7)] = rnott1.7
+compare.prop <- ggplot(final.size.test, aes(prop.infected, fill = as.factor(pop.size)))+
+  geom_density(alpha = .5)+facet_wrap(~rnott, scales = "free") + 
+  geom_vline(aes(xintercept = final.size), size = 1.5, color = "purple")+
+  scale_fill_discrete(name="Population\n Size") +#,
+                      #breaks=c("beta.hat.100", "beta.hat.1000", "beta.hat.10000"),
+                      #labels=c("100", "1000", "10000")) +
+  labs(x = "Final Prop. Infected", y = "Density")
+save_plot(paste0(fig_path, "compare.final.prop.pdf"), compare.prop, base_height = 8, base_aspect_ratio = 1.5)
+
+head(final.size.test)
+mle.beta <- ggplot(beta.hat.master, aes(x = as.factor(rnott), y = rnott.hat, 
+                            fill = as.factor(beta.hat))) +
   geom_boxplot() + 
-  scale_y_continuous(limits = c(0.9, 4), breaks = seq(0.9, 4, .2)) 
+  scale_y_continuous(limits = c(0.9, 3.1), breaks = seq(0.9, 4, .2)) +
+  scale_fill_discrete(name="Population Size",
+                      breaks=c("beta.hat.100", "beta.hat.1000", "beta.hat.10000"),
+                      labels=c("100", "1000", "10000")) +
+  labs(x = "Simulation Beta/Gamma", y = "rnott.hat", title = "MLE of Beta")
+
+save_plot(filename = paste0(fig_path, "mle.beta.pdf"), mle.beta, base_aspect_ratio = 1.5)
   

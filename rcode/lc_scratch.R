@@ -26,11 +26,11 @@ if(grepl('laurencastro', Sys.info()['login'])) fig_path <- "~/Documents/projects
 
 # Data Path 
 if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/data.smalltimestep/"
-if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/"
+if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/data/smalltimestep/"
 
 # Reading in files from saved data runs for chosen R0s and popsizes
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 2, .1))
+r0_seq = c(0.95, seq(1, 2.5, .5))
 
 file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
@@ -38,7 +38,7 @@ data.files.trial <- data.frame(cbind(combos, file.list))
 
 # Deciding which trials are epidemics based on a threshold 
 # for prevalance and total proportion infected
-epidemic.trials <- set_epidemic_criteria(data.files.trial, threshold.prev = .025, threshold.prop = .25)
+epidemic.trials <- set_epidemic_criteria(data.files.trial, threshold.prev = .001, threshold.prop = .001)
 data.files.trial$epidemic.trials <- epidemic.trials
 
 
@@ -66,17 +66,23 @@ final.infected.master %>%
     }
   })
 
+min()
+time.steps = seq(-870,898, 10)
+random.iter <- sample(x = seq(1:50), size = 25)
+
+metrics.trajectory %>% 
+  filter(shifted.time %in% time.steps & iter %in% random.iter) %>%
+  mutate(day.time = shifted.time/10) -> trajectories.day
 
 
+ggplot(data = day.steps, aes(x =day.time, y = vI)) + # , group = iter, color = iter)) +
+  geom_smooth()+guides(color = FALSE) +
+  facet_wrap(~rnott, scales = "free") +
+  scale_y_continuous(breaks = seq(from = 1, to = 80, 10)) +
+  #scale_x_continuous(aes(breaks = c(min(shifted.time), max(shifted.time), 100), 
+                         #labels = shifted.time/10)) +
+  labs(x = "Shifted Time (days)" ) 
 
-
-
-# plot a sample 
-#random.iter <- sample(x = seq(1:1000), size = 50)
-#trajectories %>% filter(iter %in% random.iter) -> trajectories.sample
-#ggplot(data = trajectories.sample, aes(x = vtime, y = vI, group = iter, color = iter))+
-#  geom_smooth()+guides(color = FALSE) +
-#  facet_grid(rnott~pop.size, scales = "free")
 
 average.vi <- group_by(trajectory.master, rnott, pop.size, shifted.time) %>%
   filter(rnott %in% desired.rnotts) %>%
@@ -126,7 +132,7 @@ ggplot(align.ts.long, aes(x = shifted.time, y = value, group = iter, color = ite
   facet_wrap(~metric, scales = "free") + geom_line()
 
 #3. Compare the average rate at which mutations accumulate depending on R0 
-cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
+cum.strains.master <- adply(.data = data.files.trial, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
@@ -141,39 +147,54 @@ cum.strains.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand 
 cum.strains.master %>% group_by(rnott, pop.size, shifted.time) %>%
   summarise(avg.strains = mean(cum.strains), 
             sd.strains = sd(cum.strains))  %>%
-  filter(rnott %in% desired.rnotts) -> cum.strains.avg
+  filter(rnott %in% desired.rnott)  %>% 
+  mutate(time.day = shifted.time/10) -> cum.strains.avg
+
+cumulative.strains <- ggplot(cum.strains.avg, aes(x= time.day, y = avg.strains))+geom_line()+
+  facet_grid(pop.size~rnott, scales = "free")+
+  geom_ribbon(aes(ymin = (avg.strains-sd.strains), 
+                  ymax = (avg.strains+sd.strains)), alpha = .5)+
+  theme(strip.background = element_blank()) +
+  labs(x = "Time (Days)", y = "Cumulative Strains")
+save_plot(paste0(fig_path, "cumulative.strains.smallts.pdf"), cumulative.strains, base_height = 8, base_aspect_ratio = 1.3)
 
 # 4. Trajectories Plots of Entropy - should I align these? 
 metrics.trajectory <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
-  if (epidemic.index[1] > 0) {
-  time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
+  #epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  #if (epidemic.index[1] > 0) {
+  time.records.a <- align_time_series_all(time.records = time.records)
+ # time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
   trajectories <- combine_time_records(time.records.a)
   trajectories <- cbind(trial.params, trajectories)
   return(trajectories)
-  }
+  #}
 })
+
+
 
 
 
 # Summarise and if want to filter based on rnotts do it here 
 # create a function to do this and give you which metric you're looking for 
-metrics.trajectory %>% group_by(rnott, pop.size, shifted.time) %>%
+#metrics.trajectory 
+desired.rnott = c(0.91, 1.11, 1.25)
+
+trajectories.day %>% group_by(rnott, pop.size, day.time) %>%
   dplyr::summarise(avg.entropy = mean(entropy), 
             sd.entropy = sd(entropy),
             avg.diversity = mean(diversity),
             sd.diversity = sd(diversity),
             avg.strains = mean(cir.strains),
             sd.strains = sd(cir.strains)) %>% 
-  filter(pop.size == 1000) %>%
+  filter(rnott %in% desired.rnott) %>%
   gather(metric, value, 4:9) %>%
-  filter(metric %in% c("avg.diversity", "sd.diversity")) %>%
-  spread(metric, value)  -> avg.diversity
+  filter(metric %in% c("avg.strains", "sd.strains")) %>%
+  spread(metric, value)  -> avg.strains
   #filter(rnott %in% desired.rnotts) 
 
-trajectory.strains <- ggplot(strains.avg, aes(x = shifted.time, y = avg.strains)) + 
+trajectory.strains <- ggplot(avg.strains, aes(x = day.time, y = avg.strains)) + 
   geom_ribbon(aes(ymin = (avg.strains - sd.strains), ymax = (avg.strains + sd.strains)), 
               alpha = .3, fill="steelblue2", color="steelblue2") +
   geom_line(size = 1.5, color = "steelblue2") + facet_wrap(~ rnott, nrow = 1) +
@@ -181,7 +202,7 @@ trajectory.strains <- ggplot(strains.avg, aes(x = shifted.time, y = avg.strains)
   theme(strip.background = element_blank()) 
   
 
-trajectory.entropy <- ggplot(avg.entropy, aes(x = shifted.time, y = avg.entropy)) + 
+trajectory.entropy <- ggplot(avg.entropy, aes(x = day.time, y = avg.entropy)) + 
   geom_ribbon(aes(ymin = (avg.entropy - sd.entropy), ymax = (avg.entropy + sd.entropy)), 
               alpha = .4, fill="indianred1", color="indianred1")  +
   geom_line(size = 1.5, color = "indianred1") + facet_wrap(~ rnott, nrow = 1) +
@@ -189,7 +210,7 @@ trajectory.entropy <- ggplot(avg.entropy, aes(x = shifted.time, y = avg.entropy)
   theme(strip.background = element_blank()) 
 
 
-trajectory.diversity <- ggplot(avg.diversity, aes(x = shifted.time, y = avg.diversity)) + 
+trajectory.diversity <- ggplot(avg.diversity, aes(x = day.time, y = avg.diversity)) + 
   geom_ribbon(aes(ymin = (avg.diversity - sd.diversity), ymax = (avg.diversity + sd.diversity)), 
               alpha = .4, fill="darkorange2", color="darkorange2")  +
   geom_line(size = 1.5, color = "darkorange2") + facet_wrap(~ rnott, nrow = 1) +
@@ -198,9 +219,14 @@ trajectory.diversity <- ggplot(avg.diversity, aes(x = shifted.time, y = avg.dive
 
 
 combined.trajectories <- plot_grid(trajectory.strains, trajectory.entropy, trajectory.diversity, nrow = 3) 
-save_plot(filename = paste0(fig_path, "combined.trajectories.pdf"), combined.trajectories,
+save_plot(filename = paste0(fig_path, "combined.trajectories.smalltimestep.pdf"), combined.trajectories,
           base_height = 8, base_aspect_ratio = 1.9)
 combined.trajectories
+
+
+
+
+
 # 5. Trajectories of Derivatives   
 ### Need to take the derivative of all first before averaging 
 metrics.trajectory %>% group_by(rnott, pop.size, iter) %>%
@@ -257,11 +283,13 @@ save_plot(filename = paste0(fig_path, "delta.avg.entropy.pdf"), delta.avg.entrop
 ##########################################
 
 # 1. Get the length of time each simulation takes
-final.time.master <-  adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
+final.time.master <-  adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
-  final.time.trial <- data.frame(all_epi_time(time.records[epidemic.index])); colnames(final.time.trial) = "days"
+  #epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  #final.time.trial <- data.frame(all_epi_time(time.records[epidemic.index])); colnames(final.time.trial) = "days"
+  final.time.trial <- data.frame(all_epi_time(time.records)); colnames(final.time.trial) = "days"
+  
   final.time.trial <-  cbind(trial.params, final.time.trial)
   return(final.time.trial)
 })
@@ -356,42 +384,105 @@ epidemic.criteria <- ggplot(meta.data.master, aes(x = max.prev, y = prop.infecte
 save_plot(filename = paste0(fig_path, "epidemic.criteria.pdf"), plot = epidemic.criteria, base_height = 8, base_aspect_ratio = 1.5)  
 
 # 4. Calculate max metrics for all-at moximum of the metric itself 
-max.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
+max.metrics.master.day <-  adply(.data = data.files.trial, .margins = 1, .id=NULL, .expand = F,function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
-  genetic.metrics <- get_max_genetic_metrics(time.records = time.records[epidemic.index], rnott = trial.params$rnott)
+  #epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  #genetic.metrics <- get_max_genetic_metrics(time.records = time.records[epidemic.index], rnott = trial.params$rnott)
+  genetic.metrics <- get_max_genetic_metrics(time.records = time.records, rnott = trial.params$rnott)
+  
   genetic.metrics <-  cbind(rep(trial.params$pop.size, nrow(genetic.metrics)), genetic.metrics)
   colnames(genetic.metrics)[1] <- "pop.size"
   return(genetic.metrics)
 })
-max.metrics.m <- melt(data = max.metrics.master, id.vars = c("rnott", "pop.size"),
+max.metrics.m.small <- melt(data = max.metrics.master.small, id.vars = c("rnott", "pop.size"),
                       measure.vars = c("max.entropy", "max.diversity"))
-colnames(max.metrics.m) <- c("rnott", "pop.size", "type", "value") 
+colnames(max.metrics.m.small) <- c("rnott", "pop.size", "type", "value") 
 
-max.metric.plot <- ggplot(max.metrics.m, aes(factor(rnott), value)) + 
+head(max.metrics.m.small)
+
+max.metrics.m.small %>% #filter(rnott %in% desired.rnott) %>%
+  ggplot(aes(factor(rnott), value)) + 
   facet_grid(type~pop.size, scales = "free_y") +
-  geom_boxplot()+
-  labs(x = expression("R"[0]), y = "Distance")
-#save_plot(paste0(fig_path, "max.metric.entropy.diversity.epidemics.pdf"),max.metric.plot, base_height = 8, base_aspect_ratio = 1.2)
+  geom_boxplot() +
+  labs(x = expression("R"[0]), y = "Distance") +
+  theme(strip.background = element_blank()) +
+  labs(title = ".1*Day Time Step") -> max.metric.plot.small
+
+
+save_plot(paste0(fig_path, "max.metric.plot.day.pdf"), max.metric.plot.day, base_height = 8, base_aspect_ratio = 1.2)
+
+max.metrics.m.small$time.step = "small"
+max.metrics.m.day$time.step = "day"
+
+max.metrics.master = rbind(max.metrics.m.small, max.metrics.m.day)
+
+max.metrics.master %>% #filter(rnott %in% desired.rnott) %>%
+  ggplot(aes(factor(rnott), value, fill = time.step)) + 
+  facet_grid(type~pop.size, scales = "free_y") +
+  geom_boxplot() +
+  labs(x = expression("R"[0]), y = "Distance") +
+  theme(strip.background = element_blank()) -> max.metrics.master.plot
+  
+
+save_plot(paste0(fig_path, "max.metric.master.plot.pdf"), max.metrics.master.plot, base_height = 8, base_aspect_ratio = 1.2)
+
+
+
 
 
 # 5. Code for getting genetic metrics at time of max infection 
-max.infect.metrics.master <-  adply(.data = data.files, .margins = 1, .id=NULL, .expand = F,function(x) {
+max.infect.metrics.master.small <-  adply(.data = data.files.trial, .margins = 1, .id=NULL, .expand = F,function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
-  time.records.a <- align_time_series_all(time.records[epidemic.index])
+  #epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  #time.records.a <- align_time_series_all(time.records[epidemic.index])
+  time.records.a <- align_time_series_all(time.records)
   metrics <- metrics_at_max_infect(time.records = time.records.a)
   metrics <-  cbind(rep(trial.params, nrow(metrics)), metrics)
   return(metrics)
 })
 
 
-entropy.at.max <- plot.metric.at.maxinfect(max.infect.metrics.master, 
-                                             desired.rnotts = r0_seq, desired.metric = "entropy")
+max.infect.metrics.m.small <- melt(data = max.infect.metrics.master.small , id.vars = c("rnott", "pop.size"),
+                            measure.vars = c("entropy", "diversity", "num.cir.strains"))
+colnames(max.infect.metrics.m.small ) <- c("rnott", "pop.size", "type", "value") 
 
-save_plot(filename = paste0(fig_path, 'entropy.at.max.pdf'), entropy.at.max, base_height = 8, base_aspect_ratio = 1.5)
+
+max.infect.metrics.m.small %>% #filter(rnott %in% desired.rnott) %>%
+  ggplot(aes(factor(rnott), value)) + 
+  facet_grid(type~pop.size, scales = "free_y") +
+  geom_boxplot() +
+  labs(x = expression("R"[0]), y = "Distance") +
+  theme(strip.background = element_blank()) +
+  labs(title = ".1*Day Time Step") -> max.infect.metrics.small.plot
+
+
+max.infect.metrics.m.small$time.step = "small"
+max.infect.metrics.m.day$time.step = "day"
+
+max.infect.metrics = rbind(max.infect.metrics.m.small, max.infect.metrics.m.day)
+
+max.infect.metrics %>% #filter(rnott %in% desired.rnott) %>%
+  ggplot(aes(factor(rnott), value, fill = time.step)) + 
+  facet_grid(type~pop.size, scales = "free_y") +
+  geom_boxplot() +
+  labs(x = expression("R"[0]), y = "Distance") +
+  theme(strip.background = element_blank()) -> max.infect.metrics.plot
+
+
+save_plot(paste0(fig_path, "max.infect.metrics.plot.pdf"), max.infect.metrics.plot, base_height = 8, base_aspect_ratio = 1.2)
+
+
+
+max.infect.metrics.master %>% filter(rnott %in% desired.rnott) ->max.infect.metrics.sample
+diversity.at.max <- plot.metric.at.maxinfect(max.infect.metrics.sample, 
+                                             desired.rnotts = desired.rnott, desired.metric = "diversity")
+
+metrics.at.max.infect = plot_grid(entropy.at.max, diversity.at.max, nrow = 2)
+save_plot(filename = paste0(fig_path, 'metrics.at.max.infect.smallts.pdf'), 
+          metrics.at.max.infect, base_height = 8, base_aspect_ratio = 1.5)
+
 # 6. Code for combining beginning threshold metrics and plotting 
 beg.threshold.metrics.master <- adply(.data = data.files, .margins = 1, .id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))

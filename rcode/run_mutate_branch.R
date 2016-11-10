@@ -21,6 +21,7 @@ library(dplyr)
 
 fig_path = "~/Documents/projects/viral_evolution/viral_evolution_repo/figs/"
 if(grepl('meyerslab', Sys.info()['login'])) data_path = ('~/Documents/projects/viral_evolution/viral_evolution_repo/data/')
+if(grepl('meyerslab', Sys.info()['login'])) data_path = ('~/Documents/projects/viral_evolution/viral_evolution_repo/data/')
 
 ##################################################################################
 # Set up initial functions to designate parameters and multiple runs 
@@ -51,7 +52,8 @@ return(as.list(environment()))
 nrealisations = 50
 
 N = c(100, 1000, 10000)
-r0_seq = c(seq(0.9, 2, .1))
+r0_seq = c(0.95, seq( 1, 4, .5))
+
 #r0_seq = c(0.9, 1, 1.1)
 
 if(grepl('meyerslab', Sys.info()['login'])) data_path <- "~/Documents/projects/viral_evolution/viral_evolution_repo/data/trial1000/"
@@ -62,11 +64,11 @@ for (size in 1:length(N)) {
   for (r0 in 1:length(r0_seq)) {
     trial <- run_mutate_branches_inc(num_reps = nrealisations,
                                      params = epi_mut_params(N = N[size], R0 = r0_seq[r0], delta_t = .1, tend=250))
-    filename.time <- paste0(data_path, "data.smalltimestep/trial/trial_rnott", r0_seq[r0], "_N", N[size])
+    filename.time <- paste0(data_path, "smalltimestep/trial/trial_rnott", r0_seq[r0], "_N", N[size])
     time.records <- time_records_all(trial)
     save(time.records, file = paste0(filename.time, ".RData"))
     
-    filename.strain <- paste0(data_path,"data.smalltimestep/strain/strain_rnott", r0_seq[r0], "_N", N[size])
+    filename.strain <- paste0(data_path,"smalltimestep/strain/strain_rnott", r0_seq[r0], "_N", N[size])
     strain.records <- strain_freq_all(trial)
     save(strain.records, file = paste0(filename.strain, ".RData"))
   }
@@ -76,14 +78,9 @@ for (size in 1:length(N)) {
 ##### 
 # When sampling 
 
-newmodel <- run_mutate_branches_inc(num_reps = 100, params = 
-                                      epi_mut_params(N=1000, contact.per.day = 4, R0 = 1.5, delta_t = 1, tend = 120, year_mut_rate = 0))
-
+newmodel <- run_mutate_branches_inc(num_reps = 25, params = 
+                                      epi_mut_params(N=1000, contact.per.day = 4, R0 = 0.85, delta_t = .1, tend = 120))
 
 f = summary(epi_size_all(newmodel)$V1)
 r0 = -log(1-f)/f
 
-
-head(trialat2.bigtimestep[[3]]$time_record)
-beta
-hist(trialat2.bigtimestep[[3]]$time_record$new.infected) 

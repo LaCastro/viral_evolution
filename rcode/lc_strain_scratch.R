@@ -19,13 +19,22 @@ if(grepl('laurencastro', Sys.info()['login'])) data_path <- "~/Documents/project
 N = c(100, 1000, 10000)
 r0_seq = c(seq(0.9, 2, .2), seq(2,5, 0.5))
 
+N = 1000
+desired.rnott = seq(0.9, 1.9 ,.2)
 
-file.list <- get_vec_of_files(dir_path = data_path, type = "strain", r0_seq, N)
+
+file.list <- get_vec_of_files(dir_path = data_path, type = "strain", desired.rnott, N)
+file.list <- get_vec_of_files(dir_path = data_path, type = "strain", desired.rnott, N)
+file.list <- file.list[c(2,5,8,11, 14, 17)]
+
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
+combos <- sort(apply(expand.grid(desired.rnott, N), 1, paste, collapse = "_", sep = "")) 
 data.files.strain <- data.frame(cbind(combos, file.list))
 
+
 data.files <- left_join(data.files.trial, data.files.strain, by = "combos")
-colnames(data.files) <- c("combos", "file.trial", "epidemic.trials", "file.strain")
+colnames(data.files) <- c("combos", "file.trial", "epidemic.index", "file.strain")
+head(data.files)
 
 epidemic.trials <- set_epidemic_criteria(time.records, threshold.prev = .025, threshold.prop = .25)
 data.files.trial$epidemic.trials <- epidemic.trials
@@ -33,17 +42,17 @@ data.files.trial$epidemic.trials <- epidemic.trials
 
 ######## Getting Final Times across R0s and popsizes 
 # Get trajectories of infected to see what is occuring when R0 ~ 1
-epidemic.trials <- alply(.data = data.files, .margins = 1, function(x) {
+epidemic.trials <- alply(.data = data.files.trial, .margins = 1, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
-  epidemic.trials <- get_epidemic_index(time.records, trial.N = trial.params$pop.size, threshold.prev = .025,
-                                        threshold.prop = .25)
+  epidemic.trials <- get_epidemic_index(time.records, trial.N = trial.params$pop.size, threshold.prev = .01,
+                                        threshold.prop = .01)
   if (length(epidemic.trials) == 0) epidemic.trials <- 0
   epidemic.trials <- cbind(trial.params, epidemic.trials)
   return(epidemic.trials)
 })
 
-data.files$epidemic.trials <- epidemic.trials
+data.files.trial$epidemic.trials <- epidemic.trials
 
 
 
@@ -153,7 +162,7 @@ data.files.trial$epidemic.trials <- epidemic.trials
 ## First get time at max for each trial
 # Build in max number of circulating strains to see what the clonal interference chart looks lik 
 
-trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand = F, function(x) {
+trajectories <- adply(.data = data.files, .margins = 1,.id=NULL, .expand = F, function(x) {
   load(as.character(x$file.list))
   trial.params <- get_params(x)
   epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
@@ -166,8 +175,8 @@ trajectories <- adply(.data = data.files.trial, .margins = 1,.id=NULL, .expand =
   }
 })
 
-trajectories %>% filter(iter == 31 & pop.size == 1000) %>%
-  group_by(rnott, pop.size) %>%
+trajectories %>% filter(iter %in% random.iter ) %>%
+  group_by(rnott, shifted.time) %>%
   select(vtime, shifted.time, diversity, entropy) -> trajectories.sample
 
 
@@ -187,19 +196,22 @@ time.max.master <- adply(.data = data.files.trial, .margins = 1, .id=NULL, .expa
 time.max.master %>% filter(iter == 31 & pop.size == 1000) %>%
   gather(metric, value, 4:6) -> time.max.sample
 
-file.list <- get_vec_of_files(dir_path = data_path, type = "strain", r0_seq, N)
+r0_seq = seq(0.9, 1.9, .2)
+file.list <- get_vec_of_files(dir_path = data_path, type = "trial", r0_seq, N)
 combos <- sort(apply(expand.grid(r0_seq, N), 1, paste, collapse = "_", sep = "")) 
-data.files.strain <- data.frame(cbind(combos, file.list))
+data.files.trial <- data.frame(cbind(combos, file.list))
 
 ## Sampling 20/100 strain records
-sample = 31
 
-long.strains.absolute.master <- adply(.data = data.files, .margins = 1,.id = NULL, .expand = FALSE, function(x) {
-  
+random.iter = sample(1:100, 6)
+
+long.strains.absolute.master <- adply(.data = data.files, 
+                                      .margins = 1,.id = NULL, .expand = FALSE, function(x) {
   # first load the trajectories
   load(as.character(x$file.trial))
   trial.params <- get_params(x)
-  epidemic.index <- x$epidemic.trials[[1]]$epidemic.trials
+  epidemic.index <- x$epidemic.index[[1]]$epidemic.trials
+  
   if (epidemic.index[1] > 0) {
     time.records.a <- align_time_series_all(time.records = time.records[epidemic.index])
     vI.trajectory <- combine_time_records(time.records.a)
@@ -224,19 +236,27 @@ long.strains.absolute.master <- adply(.data = data.files, .margins = 1,.id = NUL
     return(strain.absolute.long)
     }
   })
-sample <- sample(1:100, 6)
+
+sample <- sample(1:50,1)
 
 long.strains.absolute.master %>% 
-  filter(pop.size == 1000 & rnott == 1.3 & iter %in% sample) -> long.strains.absolute.sample
+  filter(iter %in% random.iter) -> long.strains.absolute.sample
 
 ci.pop.1000 <- ggplot2::ggplot(data = long.strains.absolute.sample,
                                aes(x = vtime, y = num.infected, fill = strain.name)) +
-  facet_wrap(~iter, nrow = 3) +
+  facet_grid(rnott~iter) +
   geom_area(color = "black", size = .2, alpha = .3) + guides(fill = FALSE) +
   #geom_vline(data = time.max.sample, aes(xintercept = jitter(value, .25), color = metric), size = 1.25, alpha = .85) +
   #scale_color_manual(values = c("black", "mediumblue", "purple"), guide = FALSE) + 
   #theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
-  labs(x = "Time", y = "Num.Infected")
+  labs(x = "Time", y = "Num.Infected")+
+  theme(strip.background = element_blank())  
+ci.pop.1000
+
+save_plot(filename = paste0(fig_path, "ci.pop.1000.day.pdf"), ci.pop.1000, base_height = 8, base_aspect_ratio = 1.5)
+
+
+
 
 
 # Previous Function that just took 
@@ -254,20 +274,42 @@ long.strains.master <- adply(.data = data.files, .margins = 1,.id = NULL, .expan
 long.strains.master %>% filter(pop.size == 1000) -> long.strains.sample
 
 # Clonal Interference Graph - Frequencies 
-#time.max.sample %>% gather(metric, value, 4:6) -> time.max.sample.long
 
-ci.pop.1000 <- ggplot2::ggplot(data = long.strains.sample, aes(x = time, y = frequency, fill = strain.name)) +
-  facet_wrap(~rnott, nrow = 3) +
+sample = sample(1:100, 1)
+
+long.strains.absolute.master %>% filter(iter == sample) -> long.strains.absolute.onesample
+
+head(long.strains.absolute.onesample)
+
+
+trajectories %>% filter(iter %in% random.iter) %>%
+  group_by(rnott, shifted.time) %>% 
+  summarize(avg.diversity = mean(diversity),
+            sd.diversity = sd(diversity),
+            avg.entropy = mean(entropy),
+            sd.entropy = sd(entropy)) -> trajectories.rnott
+
+ci.rnott <- ggplot(data = long.strains.absolute.onesample,
+                               aes(x = vtime, y = num.infected, fill = strain.name)) +
+  facet_wrap(~rnott, ncol = 1, scales = "free") +
   geom_area(color = "black", size = .2, alpha = .3) + guides(fill = FALSE) +
-  geom_vline(data = time.max.sample, aes(xintercept = jitter(value, .25), color = metric), size = 1.25, alpha = .85) +
-  scale_color_manual(values = c("black", "mediumblue", "purple"), guide = FALSE) + 
-  #theme(strip.background = element_blank(),  strip.text.x = element_blank()) +
-  labs(x = "Time", y = "Frequency")
+  labs(x = "Time", y = "Num.Infected")+
+  theme(strip.background = element_blank())  
 
-diversity.plot <- ggplot(trajectories.sample, aes(x = vtime, y = diversity)) + facet_wrap(~rnott, nrow = 3) +
-  geom_line(color = "black", size = 2)
-entropy.plot <- ggplot(trajectories.sample, aes(x = vtime, y = entropy)) + facet_wrap(~rnott, nrow = 3) +
-  geom_line(color = "blue4", size = 2)
 
-combined <- plot_grid(ci.pop.1000, diversity.plot, entropy.plot, nrow = 1)
-save_plot(filename = paste0(fig_path, "combined.CI2.pdf"), combined, base_height = 8, base_aspect_ratio = 1.9)
+diversity.plot <- ggplot(trajectories.rnott, aes(x = shifted.time, y = avg.diversity)) +
+ geom_line(color = "purple") + geom_ribbon(aes(ymin = (avg.diversity-sd.diversity), ymax 
+                                               = avg.diversity + sd.diversity), 
+                                          fill = "purple", alpha = .5)+
+                                          facet_wrap(~rnott, ncol = 1, scales = "free")+
+  theme(strip.background = element_blank())  
+
+entropy.plot <- ggplot(trajectories.rnott, aes(x = shifted.time, y = avg.entropy)) +
+  geom_line(color = "blue") + geom_ribbon(aes(ymin = (avg.entropy-sd.entropy), ymax 
+                                                = avg.entropy + sd.entropy), 
+                                            fill = "blue", alpha = .5)+
+  facet_wrap(~rnott, ncol = 1, scales = "free")+
+  theme(strip.background = element_blank())  
+
+combined <- plot_grid(ci.rnott, diversity.plot, entropy.plot, nrow = 1)
+save_plot(filename = paste0(fig_path, "combined.CIday3panel.pdf"), combined, base_height = 8, base_aspect_ratio = 1.9)
